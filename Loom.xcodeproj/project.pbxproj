@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		D8F3788C2FDE460400CD6EC9 /* Runestone in Frameworks */ = {isa = PBXBuildFile; productRef = 5F7D4AF8A6C34ED693AA6746 /* Runestone */; };
+		AA000001AA000001AA000001 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = AA000002AA000002AA000002 /* GRDB */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +41,7 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				D8F3788C2FDE460400CD6EC9 /* Runestone in Frameworks */,
+				AA000001AA000001AA000001 /* GRDB in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -80,6 +82,7 @@
 			name = Loom;
 			packageProductDependencies = (
 				5F7D4AF8A6C34ED693AA6746 /* Runestone */,
+				AA000002AA000002AA000002 /* GRDB */,
 			);
 			productName = Loom;
 			productReference = D8F378572FDE3BAF00CD6EC9 /* Loom.app */;
@@ -111,6 +114,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				632BCDD613BB43A285528950 /* XCRemoteSwiftPackageReference "Runestone" */,
+				AA000003AA000003AA000003 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D8F378582FDE3BAF00CD6EC9 /* Products */;
@@ -358,6 +362,14 @@
 				minimumVersion = 0.1.0;
 			};
 		};
+		AA000003AA000003AA000003 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -365,6 +377,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 632BCDD613BB43A285528950 /* XCRemoteSwiftPackageReference "Runestone" */;
 			productName = Runestone;
+		};
+		AA000002AA000002AA000002 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000003AA000003AA000003 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
