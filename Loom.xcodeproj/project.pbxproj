@@ -6,6 +6,10 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D8F3788C2FDE460400CD6EC9 /* Runestone in Frameworks */ = {isa = PBXBuildFile; productRef = 5F7D4AF8A6C34ED693AA6746 /* Runestone */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		D8F378572FDE3BAF00CD6EC9 /* Loom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Loom.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -35,6 +39,7 @@
 		D8F378542FDE3BAF00CD6EC9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				D8F3788C2FDE460400CD6EC9 /* Runestone in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -73,6 +78,9 @@
 				D8F378592FDE3BAF00CD6EC9 /* Loom */,
 			);
 			name = Loom;
+			packageProductDependencies = (
+				5F7D4AF8A6C34ED693AA6746 /* Runestone */,
+			);
 			productName = Loom;
 			productReference = D8F378572FDE3BAF00CD6EC9 /* Loom.app */;
 			productType = "com.apple.product-type.application";
@@ -101,6 +109,9 @@
 			);
 			mainGroup = D8F3784E2FDE3BAF00CD6EC9;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				632BCDD613BB43A285528950 /* XCRemoteSwiftPackageReference "Runestone" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D8F378582FDE3BAF00CD6EC9 /* Products */;
 			projectDirPath = "";
@@ -337,6 +348,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		632BCDD613BB43A285528950 /* XCRemoteSwiftPackageReference "Runestone" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/simonbs/Runestone";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5F7D4AF8A6C34ED693AA6746 /* Runestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 632BCDD613BB43A285528950 /* XCRemoteSwiftPackageReference "Runestone" */;
+			productName = Runestone;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D8F3784F2FDE3BAF00CD6EC9 /* Project object */;
 	validationLevel = 1;
