@@ -2,43 +2,82 @@ import SwiftUI
 
 struct ConsoleView: View {
     let session: RunSession?
+    @State private var copied = false
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    if let session {
-                        ForEach(session.logs) { entry in
-                            ConsoleLineView(entry: entry)
-                                .id(entry.id)
-                        }
-                        if session.status == .running {
-                            HStack(spacing: 6) {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                                Text("Running…")
-                                    .font(.system(.caption2, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    } else {
-                        Text("No output yet. Tap Run to execute the script.")
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .padding(8)
+        VStack(spacing: 0) {
+            // Toolbar
+            HStack {
+                Text("Console")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let session, !session.logs.isEmpty {
+                    Button {
+                        copyLogs(session.logs)
+                    } label: {
+                        Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                            .font(.caption)
+                            .foregroundStyle(copied ? .green : .secondary)
                     }
+                    .animation(.default, value: copied)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
             }
-            .onChange(of: session?.logs.count) {
-                if let last = session?.logs.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.bar)
+
+            Divider()
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        if let session {
+                            ForEach(session.logs) { entry in
+                                ConsoleLineView(entry: entry)
+                                    .id(entry.id)
+                            }
+                            if session.status == .running {
+                                HStack(spacing: 6) {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                    Text("Running…")
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        } else {
+                            Text("No output yet. Tap Run to execute the script.")
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .padding(8)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                }
+                .onChange(of: session?.logs.count) {
+                    if let last = session?.logs.last {
+                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    }
                 }
             }
         }
         .background(.regularMaterial)
+    }
+
+    private func copyLogs(_ logs: [LogEntry]) {
+        let text = logs.map { entry in
+            let ts = entry.timestamp.formatted(.dateTime.hour().minute().second())
+            return "[\(ts)] [\(entry.level.rawValue.uppercased())] \(entry.message)"
+        }.joined(separator: "\n")
+        UIPasteboard.general.string = text
+        copied = true
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            copied = false
+        }
     }
 }
 
