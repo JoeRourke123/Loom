@@ -91,7 +91,7 @@ struct ConsoleLineView: View {
                 .fill(levelColor)
                 .frame(width: 6, height: 6)
                 .padding(.top, 4)
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(entry.timestamp.formatted(.dateTime.hour().minute().second()))
                         .font(.system(size: 10, design: .monospaced))
@@ -100,6 +100,13 @@ struct ConsoleLineView: View {
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(levelColor)
                         .lineLimit(expanded ? nil : 3)
+                }
+                if let data = entry.data {
+                    Text(data)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(expanded ? nil : 2)
+                        .padding(.leading, 4)
                 }
             }
         }

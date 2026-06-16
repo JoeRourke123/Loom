@@ -1,17 +1,19 @@
 import SwiftUI
 import Runestone
+import TreeSitterTypeScriptRunestone
 
 struct EditorView: UIViewRepresentable {
     let fileURL: URL
     var externalReloadTrigger: UUID
     var onCompileError: ((CompileError?) -> Void)?
+    @AppStorage("editorLineWrapping") private var lineWrapping = true
 
     func makeUIView(context: Context) -> TextView {
         let textView = TextView()
         textView.editorDelegate = context.coordinator
         textView.theme = LoomEditorTheme()
         textView.backgroundColor = .clear
-        textView.isLineWrappingEnabled = true
+        textView.isLineWrappingEnabled = lineWrapping
         textView.showLineNumbers = true
         textView.lineHeightMultiplier = 1.3
         textView.kern = 0.3
@@ -20,13 +22,16 @@ struct EditorView: UIViewRepresentable {
         textView.autocapitalizationType = .none
         textView.smartQuotesType = .no
         textView.smartDashesType = .no
-        textView.setLanguageMode(PlainTextLanguageMode())
+        textView.setLanguageMode(TreeSitterLanguageMode(language: .typeScript))
         textView.text = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
         return textView
     }
 
     func updateUIView(_ uiView: TextView, context: Context) {
         context.coordinator.onCompileError = onCompileError
+        if uiView.isLineWrappingEnabled != lineWrapping {
+            uiView.isLineWrappingEnabled = lineWrapping
+        }
         guard context.coordinator.lastExternalReload != externalReloadTrigger else { return }
         context.coordinator.lastExternalReload = externalReloadTrigger
         let content = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""

@@ -3,9 +3,13 @@ import SwiftUI
 struct SettingsView: View {
     @State private var claudeKey = ""
     @State private var geminiKey = ""
+    @AppStorage("editorLineWrapping") private var lineWrapping = true
 
     var body: some View {
         Form {
+            Section("Editor") {
+                Toggle("Line Wrapping", isOn: $lineWrapping)
+            }
             Section("API Keys") {
                 SecureField("Claude API Key", text: $claudeKey)
                     .textInputAutocapitalization(.never)

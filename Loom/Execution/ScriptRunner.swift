@@ -16,12 +16,12 @@ actor ScriptRunner {
                 let compiled = try await SWCCompiler.shared.compile(source)
                 let bundled = ModuleBundler.bundle(compiledJS: compiled)
                 await withCheckedContinuation { continuation in
-                    executeOnThread(bundled: bundled, runId: runId, trigger: trigger, input: input, session: session) {
+                    executeOnThread(bundled: bundled, project: project, runId: runId, trigger: trigger, input: input, session: session) {
                         continuation.resume()
                     }
                 }
             } catch {
-                let entry = LogEntry(runId: runId, level: .error, message: error.localizedDescription, timestamp: Date())
+                let entry = LogEntry(runId: runId, projectName: project.name, level: .error, message: error.localizedDescription, data: nil)
                 session.append(entry)
                 session.finish(status: .error, result: nil)
                 await RunHistoryStore.shared.save(session)
@@ -33,6 +33,7 @@ actor ScriptRunner {
 
     nonisolated private func executeOnThread(
         bundled: String,
+        project: LoomProject,
         runId: UUID,
         trigger: RunTrigger,
         input: [String: Any],
@@ -40,7 +41,7 @@ actor ScriptRunner {
         completion: @escaping () -> Void
     ) {
         let thread = Thread {
-            self.execute(bundled: bundled, runId: runId, trigger: trigger, input: input, session: session)
+            self.execute(bundled: bundled, project: project, runId: runId, trigger: trigger, input: input, session: session)
             completion()
         }
         thread.name = "LoomScriptRunner"
@@ -50,6 +51,7 @@ actor ScriptRunner {
 
     nonisolated private func execute(
         bundled: String,
+        project: LoomProject,
         runId: UUID,
         trigger: RunTrigger,
         input: [String: Any],
@@ -62,11 +64,13 @@ actor ScriptRunner {
 
         ctx.exceptionHandler = { _, ex in
             let msg = ex?.toString() ?? "Unknown JS error"
-            let entry = LogEntry(runId: runId, level: .error, message: msg, timestamp: Date())
+            let entry = LogEntry(runId: runId, projectName: session.projectName, level: .error, message: msg, data: nil)
             session.append(entry)
         }
 
-        injectConsole(ctx: ctx, runId: runId, session: session)
+        let runLoop = CFRunLoopGetCurrent()!
+        let bridge = LoomBridge(ctx: ctx, project: project, session: session, runLoop: runLoop)
+        bridge.inject()
         injectCtx(ctx: ctx, runId: runId, trigger: trigger, input: input)
         ctx.evaluateScript("var __loom_result__ = undefined; var __loom_error__ = undefined;")
         ctx.evaluateScript(bundled)
@@ -86,7 +90,7 @@ actor ScriptRunner {
         let errorVal  = ctx.evaluateScript("__loom_error__")
 
         if let errorVal, !errorVal.isUndefined, let msg = errorVal.toString(), msg != "undefined" {
-            let entry = LogEntry(runId: runId, level: .error, message: msg, timestamp: Date())
+            let entry = LogEntry(runId: runId, projectName: session.projectName, level: .error, message: msg, data: nil)
             session.append(entry)
             session.finish(status: .error, result: nil)
         } else if let resultVal, !resultVal.isUndefined {
@@ -96,31 +100,6 @@ actor ScriptRunner {
         }
 
         Task { await RunHistoryStore.shared.save(session) }
-    }
-
-    nonisolated private func injectConsole(ctx: JSContext, runId: UUID, session: RunSession) {
-        func makeLogger(_ level: LogLevel) -> @convention(block) (JSValue) -> Void {
-            { value in
-                let msg: String
-                if value.isObject,
-                   let obj = value.toObject(),
-                   let data = try? JSONSerialization.data(withJSONObject: obj),
-                   let str = String(data: data, encoding: .utf8) {
-                    msg = str
-                } else {
-                    msg = value.toString() ?? ""
-                }
-                let entry = LogEntry(runId: runId, level: level, message: msg, timestamp: Date())
-                session.append(entry)
-            }
-        }
-
-        let console = JSValue(newObjectIn: ctx)!
-        console.setObject(makeLogger(.debug), forKeyedSubscript: "log" as NSString)
-        console.setObject(makeLogger(.info),  forKeyedSubscript: "info" as NSString)
-        console.setObject(makeLogger(.warn),  forKeyedSubscript: "warn" as NSString)
-        console.setObject(makeLogger(.error), forKeyedSubscript: "error" as NSString)
-        ctx.setObject(console, forKeyedSubscript: "console" as NSString)
     }
 
     nonisolated private func injectCtx(ctx: JSContext, runId: UUID, trigger: RunTrigger, input: [String: Any]) {

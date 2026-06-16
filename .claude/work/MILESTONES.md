@@ -38,17 +38,17 @@ Each milestone is a coherent, testable slice of the app. "Done means" is the acc
 ## Milestone 3 — Core Bridge
 **Done means:** Scripts can use `Loom.network`, `Loom.files`, `Loom.db`, `Loom.kv`, `Loom.log`, `Loom.ui`, `Loom.notify`. Logs tab and Database viewer are functional.
 
-- [ ] `Loom.network` — fetch via URLSession
-- [ ] `Loom.files` — read/write/list (project-scoped) + pick()
-- [ ] `Loom.db` — auto-migrating SQLite ORM (insert/select/update/delete/where), per-project + shared namespaces
-- [ ] `Loom.db.kv` / `Loom.kv` — NSUbiquitousKeyValueStore wrapper
-- [ ] `Loom.log` — structured logging → SQLite logs table
-- [ ] `Loom.ui` — alert, input, table (imperative, await-able)
-- [ ] `Loom.notify` — local notifications via UNUserNotificationCenter
-- [ ] Permission system — declaration extraction from static config, runtime prompt + grant caching
-- [ ] SQLite log store — schema, thread-safe writes
-- [ ] Logs tab UI — filter, search, JSON viewer, export
-- [ ] Database viewer — table browser, row viewer, SQL console, KV editor
+- [x] `Loom.network` — fetch via URLSession
+- [x] `Loom.files` — read/write/list (project-scoped) + pick()
+- [x] `Loom.db` — auto-migrating SQLite ORM (insert/select/update/delete/where), per-project + shared namespaces
+- [x] `Loom.db.kv` / `Loom.kv` — NSUbiquitousKeyValueStore wrapper
+- [x] `Loom.log` — structured logging → SQLite logs table
+- [x] `Loom.ui` — alert, input, table (imperative, await-able)
+- [x] `Loom.notify` — local notifications via UNUserNotificationCenter
+- [x] Permission system — inline per-bridge request (M3 scope: notifications only; full infra deferred to M4)
+- [x] SQLite log store — schema, thread-safe writes
+- [x] Logs tab UI — filter, search, JSON viewer, export
+- [x] Database viewer — table browser, row viewer, SQL console, KV editor
 
 ---
 

@@ -71,3 +71,45 @@ Approach: EditorView.Coordinator.textViewDidChange debounces 1.5s then calls SWC
 
 ## M2: Console view — 2026-06-14
 Approach: ConsoleView bottom panel in EditorContainerView (200pt, collapsible via toolbar chevron button). Shows RunSession.logs reactively. ConsoleLineView: timestamp + level dot + message, tap to expand multi-line. Run button in toolbar calls ScriptRunnerViewModel.run() and auto-expands console. Badge shows log count when collapsed.
+
+---
+
+## M3: Async bridge infrastructure (CFRunLoop pattern) — 2026-06-14
+Approach: Script thread spins CFRunLoopRunInMode(.defaultMode, 0.1, true) until __loom_result__/__loom_error__ is set. Each bridge method creates a JS Promise via `(function(f){return new Promise(f)})`, captures resolve/reject JSValues synchronously, dispatches work on GCD/Task, then schedules resolution back via CFRunLoopPerformBlock + CFRunLoopWakeUp. See ADR 006.
+
+## M3: Loom.log — structured logging — 2026-06-14
+Approach: LogBridge creates Loom.log object with debug/info/warn/error methods (synchronous, fire-and-forget). Each call appends to RunSession (live Console) and LogStore (SQLite). wireConsole() overrides global console to route through Loom.log.debug. LogStore is a GRDB actor with nonisolated append() (fire-and-forget Task internally).
+
+## M3: Loom.network — HTTP fetch — 2026-06-14
+Approach: NetworkBridge wraps URLSession.shared.dataTask in the makePromise pattern. Response resolved as plain Swift dict { status, ok, headers, _body }. Supports method/headers/body options.
+
+## M3: Loom.files — project-scoped file I/O — 2026-06-14
+Approach: FilesBridge sandboxes all paths to project.folderURL (standardized + hasPrefix check). read/write/list run on GCD background queue. pick() dispatches to main thread, presents UIDocumentPickerViewController; delegate kept alive via objc_setAssociatedObject.
+
+## M3: Loom.db — auto-migrating SQLite ORM — 2026-06-14
+Approach: ScriptDB actor wraps GRDB DatabasePool. ensureTable uses PRAGMA table_info to diff existing columns vs row keys, then CREATE TABLE or ALTER TABLE ADD COLUMN. Private tables namespaced <project>__<table>, shared as shared__<table>. Helpers marked nonisolated to satisfy GRDB write closure context.
+
+## M3: Loom.kv — iCloud KV store — 2026-06-14
+Approach: KVStore struct wraps NSUbiquitousKeyValueStore.default. Keys namespaced <project>:<key>. All ops dispatch to DispatchQueue.main.sync for thread safety. KVBridge exposes get/set/delete/list synchronously to JS.
+
+## M3: Loom.ui — imperative UI — 2026-06-14
+Approach: UIBridge dispatches to DispatchQueue.main.async for all UI ops. alert/input use UIAlertController. table presents a UIHostingController(rootView: TableView). topVC() traverses the presented VC chain.
+
+## M3: Loom.notify — local notifications — 2026-06-14
+Approach: NotifyBridge requests UNUserNotificationCenter authorization inline on first call. Schedules UNCalendarNotificationTrigger from ISO8601 date string. Promise resolves with notification identifier.
+
+## M3: SQLite log store + Logs tab UI — 2026-06-14
+Approach: LogStore actor (GRDB) with loom_logs.db. nonisolated append() fires a Task internally. LogsView has project/level pickers, search, JSON data expansion per row, JSON/CSV export via share sheet.
+
+## M3: Database viewer — 2026-06-14
+Approach: DatabaseView has Tables and KV tabs. Tables uses NavigationSplitView → table list (ScriptDB.tableNames) → TableDetailView (paginated rows + SQL console). KV tab lists all KVStore entries per project, inline edit via Alert, swipe-to-delete.
+
+---
+
+## M3: Bridge runtime debugging — 2026-06-15
+Approach: Fixed three root causes that hung/crashed the bridge under real script load. (1) Re-entrant `ctx.evaluateScript()` inside JSC microtask drain — replaced with pre-cached `__loomResolve`/`__loomReject` globals called via `JSValue.call()`, which is re-entrant-safe. (2) `NSJSONSerialization` NSException in `LogBridge.log()` — added `isValidJSONObject` guard before both serialization calls. (3) Same NSException in `KVStore.set()` when passing a JS string (`NSString` is not a valid JSON top-level type) — added `isValidJSONObject` guard. ADR 006 revised to document the final semaphore + pre-cached-helpers pattern.
+
+---
+
+## M4: M3 views recovered after git regression — 2026-06-15
+Approach: LogsView.swift and DatabaseView.swift were overwritten with M1 stubs during the git history divergence fix (local main had the M3 implementations; when we force-pushed the worktree branch to origin/main those files reverted to stubs). Recovered by cherry-picking the full implementations from commit 4ba1fe0. Root cause: local main had commits that diverged from the worktree branch and weren't merged before push.

@@ -26,7 +26,231 @@ Concrete description. No vague language. If it touches UI, describe the exact vi
 
 ---
 
-_M2 complete. Starting M3 next._
+_M4 in progress._
+
+---
+
+## M4 — Full Native Bridge — pre-flight
+
+Milestone: M4 — Full Native Bridge  
+Backlog items: Loom.device, Loom.clipboard, Loom.location, Loom.speech, Loom.contacts, Loom.calendar, Loom.photos, Loom.camera, Loom.health, Loom.ai
+
+**Decisions locked:**
+- Images (camera/photos) → write to project folder, return relative file path string
+- Permissions → inline, first-call (iOS system dialog at first API use, no pre-flight UI)
+- Loom.ai → complete/chat on apple/claude/gemini; embed/search Apple Foundation Models v2 only
+- Loom.share → deferred to M5
+
+**Build order:**
+
+**Group 1 — Trivial sync (no permissions)**
+- `DeviceBridge` — UIDevice: batteryLevel (0–1), isCharging (bool), model (string), systemVersion (string). All synchronous, no Promise.
+- `ClipboardBridge` — UIPasteboard.general: read() → string, write(text) → void. Synchronous.
+
+**Group 2 — Single async + permission**
+- `LocationBridge` — CLLocationManager. current() → Promise<{lat,lng,accuracy?}>. Requests whenInUse authorization inline. One-shot location fetch (CLLocationManager + delegate + semaphore).
+- `SpeechBridge` — AVSpeechSynthesizer + SFSpeechRecognizer. speak(text) → Promise<void> (waits for utterance to finish). recognize() → Promise<string> (presents alert with "Recording…/Done", SFSpeechAudioBufferRecognitionRequest, returns transcript).
+
+**Group 3 — Data + permission**
+- `ContactsBridge` — CNContactStore. search(query) → Promise<Contact[]>, create(fields) → Promise<string id>, update(id, fields) → Promise<void>, delete(id) → Promise<void>. Inline CNContactStore.requestAccess.
+- `CalendarBridge` — EKEventStore. events.list({from,to}) → Promise<Event[]>, events.create/update/delete. reminders.create({title,dueDate}). Inline EKEventStore.requestFullAccessToEvents/Reminders.
+- `PhotosBridge` — PHPhotoLibrary. pick() → Promise<string path> (PHPickerViewController on main thread, writes JPEG to project folder). save(path) → Promise<void> (reads from project folder, saves to library). Inline requestAddOnlyAccessToLibrary / requestReadWriteAccessToLibrary.
+- `CameraBridge` — AVFoundation + Vision. capture() → Promise<string path> (UIImagePickerController, writes JPEG). ocr(path) → Promise<string> (VNRecognizeTextRequest). barcode(path) → Promise<string> (VNDetectBarcodesRequest). Inline AVCaptureDevice.requestAccess(for:.video).
+
+**Group 4 — Complex schema**
+- `HealthBridge` — HKHealthStore. getQuantity(type, {from, to}) → Promise<{value,unit,date}[]>. saveWorkout({type,distance,duration,start?,end?}) → Promise<void>. Inline HKHealthStore().requestAuthorization scoped to types declared in loom() config (passed in at bridge init). JS type strings map to HKQuantityTypeIdentifier.
+
+**Group 5 — Multi-provider AI**
+- `AIBridge` — Foundation Models v2 LanguageModel for apple provider. Claude (Anthropic API) and Gemini (Google AI API) called via Loom.network-style URLSession. complete(prompt, opts?) → Promise<string>. chat(messages, opts?) → Promise<string>. embed(text) → Promise<number[]> (Apple only). search(query, opts?) → Promise<{text,score}[]> (Apple only — semantic similarity over provided `corpus` array).
+
+**LoomBridge wiring** — All new bridges added to LoomBridge.init + inject(). Bridges that need health permission types receive them via a `config: LoomConfig` parameter passed from ScriptRunner (parsed from loom() static config). For M4, pass an empty config if static extraction isn't done yet — inline prompts still work.
+
+**Open questions:** None — all resolved above.
+
+---
+
+<!-- M3 pre-flight archived below for reference — all items shipped -->
+
+<!--
+## M3 — Core Bridge — pre-flight
+
+Milestone: M3 — Core Bridge
+Backlog items: `Loom.network`, `Loom.files`, `Loom.db`, `Loom.kv`, `Loom.log`, `Loom.ui`, `Loom.notify`, permission system, SQLite log store, Logs tab UI, Database viewer.
+
+---
+
+### 1. Async Bridge Infrastructure
+
+**What exactly is being built:**
+The existing M2 `ScriptRunner.execute()` runs on a dedicated thread and drains JSC microtasks a few times after evaluation. This is sufficient for synchronous scripts but breaks for scripts using `await Loom.network.fetch(...)` or any other async bridge call. M3 requires a proper async bridge pattern where JS Promises are resolved by Swift async operations that run off-thread, and the script thread keeps spinning until the main Promise settles.
+
+**Implementation approach:**
+- The script execution thread already runs on a dedicated `Thread` with its own CFRunLoop.
+- Each async bridge method will: (a) create a JS Promise, (b) capture `resolve`/`reject` as `JSValue`s, (c) dispatch the actual work on a GCD background queue, (d) on completion, schedule a callback back onto the script thread's CFRunLoop via `CFRunLoopPerformBlock`.
+- The main `execute()` loop changes from "drain 5 times" to "spin CFRunLoop until `__loom_result__` or `__loom_error__` is set", with each loop iteration also calling `ctx.evaluateScript(";")` to drain microtasks.
+- A `pendingBridgeCalls: Int` counter (incremented when a bridge op starts, decremented in the CFRunLoop callback) allows the loop to also wait for all pending ops when debugging.
+- `LoomBridge.swift` — new type injected by `ScriptRunner`. Holds a reference to `JSContext`, the project, the session, and the CFRunLoop. Contains all bridge namespace injection.
+
+**Open questions:**
+- [x] **Q-M3-1: Async bridge pattern** — see below for resolution.
+
+---
+
+### 2. `Loom.log` — Structured Logging
+
+**What exactly is being built:**
+`Loom.log` JS global with `debug(msg, data?)`, `info(msg, data?)`, `warn(msg, data?)`, `error(msg, data?)`. Each call writes a `LogEntry` to the SQLite `logs` table (async, off the script thread) and also appends to the current `RunSession` (for live Console display). `console.log` continues to map to `Loom.log.debug` internally.
+
+**Implementation approach:**
+- Synchronous bridge — no async needed, fire-and-forget writes to `LogStore`.
+- `LogStore.swift` — new actor (replaces/extends the existing `LogEntry` usage). Opens `loom_logs.db` in Application Support. Schema: `id INTEGER PRIMARY KEY, run_id TEXT, project_name TEXT, timestamp TEXT, level TEXT, message TEXT, data TEXT (JSON)`.
+- `LogEntry.swift` extended with `projectName` and optional `data: String?` field.
+- `ScriptRunner.injectConsole` updated to route through `Loom.log` bridge instead of directly creating `LogEntry` objects.
+
+**Open questions:** None.
+
+---
+
+### 3. `Loom.network` — HTTP Fetch
+
+**What exactly is being built:**
+`Loom.network.fetch(url, options?)` → JS Promise → URLSession data task. API mirrors the browser `fetch` API shape: returns an object with `.json()`, `.text()`, `.status`, `.ok`, `.headers`. `options` supports `method`, `headers`, `body`.
+
+**Implementation approach:**
+- Async bridge — creates JS Promise, dispatches `URLSession.shared.data(for:)` on background queue, resolves/rejects Promise on the script thread's CFRunLoop.
+- Response object injected as a plain JS object: `{ status, ok, headers: {}, _body: <base64 or text> }` with `.json()` and `.text()` methods (synchronous, parse `_body`).
+- Errors (network failure, invalid URL) → Promise reject with `{ message, code }`.
+- `permissions: ['network']` is implicitly granted in v1 (no system prompt needed — covered by network entitlement).
+
+**Open questions:** None.
+
+---
+
+### 4. `Loom.files` — Project-Scoped File I/O
+
+**What exactly is being built:**
+`Loom.files.read(path)` → `Promise<string>`, `Loom.files.write(path, content)` → `Promise<void>`, `Loom.files.list(dir?)` → `Promise<string[]>`, `Loom.files.pick()` → `Promise<{ name, content }>` (document picker).
+
+All paths are relative to the project folder (`iCloud Drive/Loom/<projectName>/`). Absolute paths or `../` traversal throw JS exceptions. `pick()` requires a main thread UIDocumentPickerViewController.
+
+**Implementation approach:**
+- `read`, `write`, `list` — async bridge → `FileManager` calls on GCD background queue → resolve on script thread.
+- `pick()` — async bridge → dispatch to MainActor to present `UIDocumentPickerViewController`, use a continuation to await user selection, then resolve on script thread.
+- Path sandbox: `LoomBridge` holds the project folder URL; all paths are resolved relative to it with a `containedIn` check before any I/O.
+
+**Open questions:**
+- [x] **Q-M3-2: `Loom.files.pick()` presentation** — see below.
+
+---
+
+### 5. `Loom.db` — Auto-Migrating SQLite ORM
+
+**What exactly is being built:**
+`Loom.db.table('name').insert({...})`, `.select(where?)`, `.update(where, fields)`, `.delete(where)`. Per-project namespace (`<projectName>_<tableName>`). Shared namespace: `Loom.db.shared.table('name')`. Auto-migration: on first `insert`, infer column schema from the JS object's keys and value types; on subsequent inserts with new columns, `ALTER TABLE ADD COLUMN`.
+
+**Implementation approach:**
+- GRDB.swift (already in SPM for RunHistoryStore) — use `DatabasePool` per database file. Two pools: `loom_script_db.db` (private, per-project namespaced tables) and `loom_shared_db.db`.
+- `ScriptDB.swift` — actor with `static let shared`. Handles DDL (CREATE TABLE, ALTER TABLE) and DML (INSERT, SELECT, UPDATE, DELETE).
+- JS-to-Swift type mapping: JS string → `TEXT`, number → `REAL` (or `INTEGER` if all values are integers), boolean → `INTEGER (0/1)`, object/array → `TEXT (JSON)`, null → `NULL`.
+- `where` clause: plain JS object `{ key: value }` → `WHERE key = value` (equality only for M3; no operators).
+- All ORM methods are async bridge calls.
+
+**Open questions:**
+- [x] **Q-M3-3: `Loom.db` schema approach** — see below.
+
+---
+
+### 6. `Loom.kv` — iCloud Key-Value Store
+
+**What exactly is being built:**
+`Loom.kv.get(key)` → `any`, `Loom.kv.set(key, value)` → `void`, `Loom.kv.delete(key)` → `void`, `Loom.kv.list()` → `string[]`. Backed by `NSUbiquitousKeyValueStore`. Values JSON-serialised for complex types.
+
+**Implementation approach:**
+- Synchronous bridge (NSUbiquitousKeyValueStore reads are synchronous).
+- Key namespaced by project: `<projectName>:<key>`.
+- `Loom.db.kv` is an alias for `Loom.kv` (same implementation).
+- `KVStore.swift` — thin wrapper around `NSUbiquitousKeyValueStore.default`.
+
+**Open questions:** None.
+
+---
+
+### 7. `Loom.ui` — Imperative UI
+
+**What exactly is being built:**
+`Loom.ui.alert({ title, message })` → `Promise<void>`, `Loom.ui.input({ prompt, placeholder? })` → `Promise<string>`, `Loom.ui.table({ rows, columns })` → `Promise<void>`. All are await-able; the script pauses until the user dismisses the UI.
+
+**Implementation approach:**
+- Async bridge pattern — when JS calls `Loom.ui.alert(...)`, Swift dispatches to `MainActor` to present a `UIAlertController` (or SwiftUI sheet). A `CheckedContinuation` holds until the user dismisses. Then schedules the Promise resolve back on the script thread's CFRunLoop.
+- `LoomUIPresenter.swift` — `@MainActor` class with `func alert(title:message:) async`, `func input(prompt:placeholder:) async -> String`, `func table(rows:columns:) async`. Held by `LoomBridge`.
+- `ScriptRunnerViewModel` must hold a reference to `LoomUIPresenter` to wire it to the hosting view. The presenter is passed to `LoomBridge` at run time.
+- `table` for M3: present as a sheet with a `List` view. No interaction (view only, dismiss button).
+
+**Open questions:**
+- [x] **Q-M3-2** covers the main thread presentation pattern.
+
+---
+
+### 8. `Loom.notify` — Local Notifications
+
+**What exactly is being built:**
+`Loom.notify.schedule({ title, body, trigger: { date } })` → `Promise<void>`. Requests notification permission on first call if not already granted. `trigger.date` is an ISO 8601 string.
+
+**Implementation approach:**
+- Async bridge → `UNUserNotificationCenter` on main thread.
+- `NotificationBridge.swift` — handles permission request + scheduling. Cached permission status.
+- On first use: `UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])`.
+
+**Open questions:** None.
+
+---
+
+### 9. SQLite Log Store + Logs Tab UI
+
+**What exactly is being built:**
+`LogStore.swift` — GRDB-backed actor, `logs` table. Thread-safe appends. `LogsView` upgraded from stub to a functional filter/search/export UI.
+
+**Implementation approach:**
+- `LogStore.swift` — `actor` with `DatabasePool`, `DatabaseMigrator` for schema. Methods: `append(_ entry: LogEntry)`, `fetch(projectName:level:from:to:search:) async -> [LogEntry]`, `export(entries:as:) async -> URL`.
+- `LogsView.swift` — `Picker` for project filter + level filter, `DatePicker` for date range, `TextField` for search. Results in a `List`. Tap a row → JSON popover for `data` field. Toolbar button → share sheet export (JSON or CSV).
+
+**Open questions:** None.
+
+---
+
+### 10. Database Viewer
+
+**What exactly is being built:**
+`DatabaseView` upgraded from stub to: (a) relational tab — table browser (all tables grouped by project prefix), paginated rows, raw SQL console; (b) KV tab — key listing, inline edit, delete.
+
+**Implementation approach:**
+- `DatabaseView.swift` — `TabView` with `.tabItem` for Relational and KV.
+- Relational: `ScriptDB.shared.tableNames() async -> [String]` → grouped by project prefix → `List`. Tap table → paginated `List` of rows (dicts) with JSON cell expansion. SQL console: `TextField` for query → `ScriptDB.shared.executeRaw(sql:)`.
+- KV tab: `KVStore.shared.listAll() async -> [(key, value)]` → `List`. Tap to edit value inline. Swipe to delete.
+
+**Open questions:** None.
+
+---
+
+### 11. Permission System (M3 scope)
+
+**What exactly is being built:**
+For M3, the only system permission needed is notifications (`UNUserNotificationCenter`). Full permission infrastructure (declaration extraction from `loom()` static config, per-project grant caching) is deferred to M4 where HealthKit/Location/Contacts/Calendar require it. In M3: inline permission request in `NotificationBridge`. No permission UI or settings screen additions.
+
+**Open questions:**
+- [x] **Q-M3-4: Permission scope** — see below.
+
+---
+
+### Open Questions for User Sign-off
+
+- **Q-M3-1 (Async bridge):** The M2 "drain 5 times" loop won't work for real async bridge calls. Proposing a CFRunLoop-spin approach where the script thread's RunLoop stays alive, and Swift async completions are scheduled back onto it via `CFRunLoopPerformBlock`. This is the canonical pattern for JSC + async on iOS. Any objection?
+
+- **Q-M3-2 (`Loom.ui` / `Loom.files.pick()` main thread):** Both require presenting UI while the script is running on a background thread. Plan: async bridge calls dispatch to `MainActor`, present the UI, await user interaction via `CheckedContinuation`, then schedule the Promise resolution back on the script thread. The script blocks (the JS `await` holds) for the duration. Is this the interaction model you want, or should the script continue running in the background while UI is shown?
+
+- **Q-M3-3 (`Loom.db` schema):** Plan is to infer column schema from the first `insert` call (key names → column names, JS types → SQL types). New columns added automatically on subsequent inserts with new keys (`ALTER TABLE ADD COLUMN`). No explicit schema declaration needed from the script. Acceptable?
+
+- **Q-M3-4 (Permission scope in M3):** Only `Loom.notify` needs a system permission prompt in M3 (notifications). Proposing to wire it inline (`UNUserNotificationCenter.requestAuthorization`) rather than building the full permission declaration/extraction/caching infrastructure (which is more relevant for M4 with HealthKit/Location). Agreed?
 
 ## M2 Pre-flight specs (archived)
 
@@ -248,3 +472,4 @@ A `ConsoleView` SwiftUI view that shows live `LogEntry` items from the active `R
 
 **Dependencies:**
 - Blocked by: `console.log` capture, JSC execution context
+-->

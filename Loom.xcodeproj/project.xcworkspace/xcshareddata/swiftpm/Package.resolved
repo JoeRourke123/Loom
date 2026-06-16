@@ -1,5 +1,5 @@
 {
-  "originHash" : "c66e2cc6ccaf7f01e70835e0a5ead647b2fca12576d8aaa584e90767b29fb31d",
+  "originHash" : "b8f2b1aa351eae36b80975ee578a0be1780ad0edc797ba72bb3730ce10761018",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "98be227227af10cc7a269cb3ffb23686c0610b17",
         "version" : "0.20.9"
+      }
+    },
+    {
+      "identity" : "treesitterlanguages",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/simonbs/TreeSitterLanguages",
+      "state" : {
+        "revision" : "15cf3a9ec3ab95e0d058b7df9f35619123c9e02d",
+        "version" : "0.1.10"
       }
     }
   ],

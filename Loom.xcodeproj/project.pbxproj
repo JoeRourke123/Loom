@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		AA000001AA000001AA000001 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = AA000002AA000002AA000002 /* GRDB */; };
+		D88B75A62FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone in Frameworks */ = {isa = PBXBuildFile; productRef = D88B75A52FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone */; };
 		D8F3788C2FDE460400CD6EC9 /* Runestone in Frameworks */ = {isa = PBXBuildFile; productRef = 5F7D4AF8A6C34ED693AA6746 /* Runestone */; };
 /* End PBXBuildFile section */
 
@@ -40,6 +41,7 @@
 		D8F378542FDE3BAF00CD6EC9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				D88B75A62FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone in Frameworks */,
 				D8F3788C2FDE460400CD6EC9 /* Runestone in Frameworks */,
 				AA000001AA000001AA000001 /* GRDB in Frameworks */,
 			);
@@ -83,6 +85,7 @@
 			packageProductDependencies = (
 				5F7D4AF8A6C34ED693AA6746 /* Runestone */,
 				AA000002AA000002AA000002 /* GRDB */,
+				D88B75A52FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone */,
 			);
 			productName = Loom;
 			productReference = D8F378572FDE3BAF00CD6EC9 /* Loom.app */;
@@ -115,6 +118,7 @@
 			packageReferences = (
 				632BCDD613BB43A285528950 /* XCRemoteSwiftPackageReference "Runestone" */,
 				AA000003AA000003AA000003 /* XCRemoteSwiftPackageReference "GRDB" */,
+				D88B75A42FE0E02A003ABAF4 /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D8F378582FDE3BAF00CD6EC9 /* Products */;
@@ -392,6 +396,14 @@
 				minimumVersion = 6.0.0;
 			};
 		};
+		D88B75A42FE0E02A003ABAF4 /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/simonbs/TreeSitterLanguages";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.10;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -404,6 +416,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA000003AA000003AA000003 /* XCRemoteSwiftPackageReference "GRDB" */;
 			productName = GRDB;
+		};
+		D88B75A52FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D88B75A42FE0E02A003ABAF4 /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
+			productName = TreeSitterTypeScriptRunestone;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
