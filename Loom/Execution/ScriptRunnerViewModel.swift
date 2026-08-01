@@ -14,13 +14,21 @@ final class ScriptRunnerViewModel {
         compileError = nil
 
         Task {
-            // startRun returns a live session immediately; execution runs in background.
+            defer { isRunning = false }
+
             let session = await ScriptRunner.shared.startRun(project: project, trigger: .manual)
             currentSession = session
-
-            // Wait for session to finish via its completion stream.
             for await _ in session.completionStream {}
-            isRunning = false
+
+            // Keep isRunning = true while widget.ts runs so the spinner stays visible
+            // for the full operation — without this, the spinner never renders on fast
+            // second runs because both state changes happen within a single SwiftUI frame.
+            if project.hasWidget {
+                await WidgetScriptRunner.shared.runIfNeeded(
+                    project: project,
+                    mainResult: session.result as? String
+                )
+            }
         }
     }
 }

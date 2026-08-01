@@ -8,4 +8,5 @@ enum RunTrigger: String, Codable {
     case siri
     case backgroundRefresh
     case backgroundProcessing
+    case widgetAction
 }

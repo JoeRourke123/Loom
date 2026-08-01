@@ -14,15 +14,6 @@
             symbolName = "+[NSJSONSerialization dataWithJSONObject:options:error:]"
             moduleName = "">
             <Locations>
-               <Location
-                  uuid = "A18ACE58-4079-4983-9ADB-A9A4D8A70BFD - 384e6076e364c83e"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "+[NSJSONSerialization dataWithJSONObject:options:error:]"
-                  moduleName = "Foundation"
-                  usesParentBreakpointCondition = "Yes">
-               </Location>
             </Locations>
          </BreakpointContent>
       </BreakpointProxy>
@@ -49,15 +40,6 @@
             symbolName = "objc_exception_throw"
             moduleName = "">
             <Locations>
-               <Location
-                  uuid = "006B4021-8CCA-4E1F-96A0-2C44D21EF3FE - ca05e3e8d0103ce6"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "objc_exception_throw"
-                  moduleName = "libobjc.A.dylib"
-                  usesParentBreakpointCondition = "Yes">
-               </Location>
             </Locations>
          </BreakpointContent>
       </BreakpointProxy>
@@ -71,15 +53,6 @@
             symbolName = "objc_exception_throw"
             moduleName = "">
             <Locations>
-               <Location
-                  uuid = "0453ADE5-4048-4655-92E6-5C0DD0E2D02C - ca05e3e8d0103ce6"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "objc_exception_throw"
-                  moduleName = "libobjc.A.dylib"
-                  usesParentBreakpointCondition = "Yes">
-               </Location>
             </Locations>
          </BreakpointContent>
       </BreakpointProxy>

@@ -113,3 +113,44 @@ Approach: Fixed three root causes that hung/crashed the bridge under real script
 
 ## M4: M3 views recovered after git regression — 2026-06-15
 Approach: LogsView.swift and DatabaseView.swift were overwritten with M1 stubs during the git history divergence fix (local main had the M3 implementations; when we force-pushed the worktree branch to origin/main those files reverted to stubs). Recovered by cherry-picking the full implementations from commit 4ba1fe0. Root cause: local main had commits that diverged from the worktree branch and weren't merged before push.
+
+---
+
+## M6: @loom/widget JS module + ModuleBundler widget mode — 2026-06-16
+Approach: 22 w.* builder functions as an inline IIFE in ModuleBundler.loomWidgetModule (assigns to globalThis.__loom_widget__). ModuleBundler.widgetBundle() prepends the module and adds '@loom/widget' to requireShim. esmToCJS extended to handle export const/let/var (strips 'export ' prefix, collects name, appends module.exports.name = name at end) and export { a, b } (emits module.exports assignments inline). loomCoreStub updated to capture __loom_config__ for refreshAfter extraction. widgetExecutionFooter calls each size factory with a per-size ctx, serialises result to __loom_widget_result__.
+
+## M6: WidgetScriptRunner — 2026-06-16
+Approach: Actor that runs widget.ts after every successful main.ts run (via ScriptRunner hook). Compiles+bundles with SWC+widgetBundle, executes on dedicated Thread, injects mainResult as ctx.input via JSContext.setObject (avoids escaping), reads __loom_widget_result__, writes JSON to App Group UserDefaults (group.uk.co.joerourke.loom, key: loom.widget.{projectName}), calls WidgetCenter.reloadAllTimelines(). Failures are silent.
+
+## M6: WidgetNode + WidgetResult — 2026-06-16
+Approach: WidgetNode backed by [String: Any] from JSONSerialization (avoids heterogeneous Codable complexity). WidgetResult decodes the full widgetExecutionFooter output (4 nullable size trees + refreshAfter). Both include fromAppGroup() factory for reading from group UserDefaults.
+
+## M6: WidgetView SwiftUI renderer — 2026-06-16
+Approach: render() returns AnyView to break recursive some View type chain. All 22 component types handled. Text uses Text.bold(Bool)/italic(Bool) (iOS 16+) to avoid mutable-var-in-@ViewBuilder issue. applyCommonProps uses AnyView chaining for conditional background/cornerRadius/padding. Data viz: Swift Charts for lineChart/barChart/sparkline; custom ZStack+Circle.trim for ring; GeometryReader bars for gauge/progressBar. Color/font helpers are module-level functions shared with extension.
+
+## M6: LoomProject.hasWidget + widgetFileURL — 2026-06-16
+Approach: Computed property checks FileManager for widget.ts presence. LoomProject extended with Sendable conformance for actor boundary crossing.
+
+## M6: ProjectStore App Group index — 2026-06-16
+Approach: updateAppGroupIndex() called at end of every loadProjects(). Writes filtered list of widget-enabled project names as JSON to loom.projects key in group UserDefaults.
+
+## M6: RunTrigger.widgetAction case — 2026-06-16
+Approach: New case added to RunTrigger enum for future use when interactive widget buttons re-run main.ts.
+
+## M6: App Group entitlement (main target) — 2026-06-16
+Approach: com.apple.security.application-groups = ["group.uk.co.joerourke.loom"] added to Loom.entitlements via Xcode MCP.
+
+## M6: Widget extension target setup — 2026-06-16
+Approach: LoomWidgetExtensionExtension target created in Xcode with App Groups (group.uk.co.joerourke.loom) and iCloud KV entitlements. WidgetNode.swift and WidgetView.swift shared with extension via PBXFileSystemSynchronizedBuildFileExceptionSet (main Loom folder exceptions) — no framework needed, no file copies.
+
+## M6: LoomWidgetProvider + LoomWidgetConfiguration — 2026-06-16
+Approach: AppIntentTimelineProvider reads WidgetResult from App Group UserDefaults; timeline policy is .never (main app drives reloads) unless widget.ts exports refreshAfter. LoomWidget registered as AppIntentConfiguration with SelectProjectIntent.
+
+## M6: SelectProjectIntent + LoomProjectEntity + LoomProjectQuery — 2026-06-16
+Approach: LoomProjectEntity (AppEntity, id = project name), LoomProjectQuery reads loom.projects JSON from App Group, SelectProjectIntent is WidgetConfigurationIntent. All in LoomWidgetExtension/AppIntent.swift.
+
+## M6: WidgetButtonIntent + WidgetToggleIntent — 2026-06-16
+Approach: WidgetIntents.swift compiled into both targets (via shared source in Loom/Widget/ + LoomWidgetExtension/ exception). Button writes ms timestamp; toggle writes !currentValue; both scoped to {projectName}:{kvKey} in NSUbiquitousKeyValueStore, then reload all timelines.
+
+## M6: In-app widget preview panel — 2026-06-16
+Approach: WidgetPreviewPanel sheet in EditorContainerView (toolbar button visible when project.hasWidget). Reads WidgetResult from App Group after each run via refreshToken UUID. Segmented picker for available sizes; WidgetView rendered at correct WidgetKit dimensions with rounded rect clip + shadow.

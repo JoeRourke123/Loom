@@ -1,10 +1,12 @@
 import Foundation
 
 enum ModuleBundler {
-    // Takes SWC-stripped ESM output and returns a self-contained JS string for JSC.
-    // Converts ESM import/export to CJS, prepends vendor IIFEs, injects require() shim.
+
+    // MARK: - Public API
+
+    // Bundles a main.ts SWC-compiled ESM string into a self-contained JSC payload.
     static func bundle(compiledJS: String) -> String {
-        let cjsScript = esmToCJS(compiledJS)
+        let cjsScript = esmToCJS(compiledJS, collectExports: false).script
         let requiredVendors = detectVendors(in: cjsScript)
         var parts: [String] = []
 
@@ -19,18 +21,48 @@ enum ModuleBundler {
             }
         }
 
-        parts.append(requireShim(entries: requireEntries))
+        parts.append(requireShim(entries: requireEntries, includeWidget: false))
         parts.append(cjsScript)
         parts.append(executionFooter)
 
         return parts.joined(separator: "\n;\n")
     }
 
-    // Convert single-line ESM import/export statements to CJS equivalents.
-    // Handles the patterns produced by @swc/wasm-typescript strip-only output.
-    private static func esmToCJS(_ esm: String) -> String {
+    // Bundles a widget.ts SWC-compiled ESM string. Includes the @loom/widget module and
+    // uses widgetExecutionFooter which calls each named size export as a factory.
+    static func widgetBundle(compiledJS: String) -> String {
+        let (cjsScript, _) = esmToCJS(compiledJS, collectExports: true)
+        let requiredVendors = detectVendors(in: cjsScript)
+        var parts: [String] = []
+
+        parts.append(commonJSSetup)
+        parts.append(loomCoreStub)
+        parts.append(loomWidgetModule)
+
+        var requireEntries: [String] = []
+        for pkg in requiredVendors {
+            if let iife = pkg.jsContent() {
+                parts.append(iife)
+                requireEntries.append("'\(pkg.rawValue)': \(pkg.globalName)")
+            }
+        }
+
+        parts.append(requireShim(entries: requireEntries, includeWidget: true))
+        parts.append(cjsScript)
+        parts.append(widgetExecutionFooter)
+
+        return parts.joined(separator: "\n;\n")
+    }
+
+    // MARK: - ESM → CJS Conversion
+
+    // Returns the converted script plus a list of collected named export identifiers.
+    // When collectExports is true, export const/let/var and export { } are emitted as
+    // module.exports assignments so the widget footer can call each size factory.
+    private static func esmToCJS(_ esm: String, collectExports: Bool) -> (script: String, exports: [String]) {
         var counter = 0
         var output: [String] = []
+        var namedExports: [String] = []
 
         for line in esm.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -66,29 +98,62 @@ enum ModuleBundler {
                 continue
             }
 
-            // import 'pkg' — side-effect import, skip
+            // import 'pkg' — side-effect only
             if capture(trimmed, pattern: #"^import\s+['"][^'"]+['"]"#) != nil {
                 continue
             }
 
-            // export default <expr...>
+            // export default <expr>
             if trimmed.hasPrefix("export default ") {
                 output.append("module.exports.default = " + trimmed.dropFirst("export default ".count))
                 continue
             }
 
-            // export { a, b } — values already in scope, no-op for single-script use
-            if capture(trimmed, pattern: #"^export\s+\{"#) != nil {
+            // export const/let/var foo = <expr>
+            // Strip "export " prefix, keep the declaration; defer module.exports assignment to end.
+            if let m = capture(trimmed, pattern: #"^export\s+(const|let|var)\s+(\w+)\b"#) {
+                // Find where the keyword starts and emit from there
+                if let re = try? NSRegularExpression(pattern: #"^export\s+"#),
+                   let match = re.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
+                   let range = Range(match.range, in: trimmed) {
+                    output.append(String(trimmed[range.upperBound...]))
+                } else {
+                    output.append(trimmed)
+                }
+                if collectExports { namedExports.append(m[2]) }
+                continue
+            }
+
+            // export { a, b } or export { a as b }
+            if let m = capture(trimmed, pattern: #"^export\s+\{([^}]+)\}"#) {
+                if collectExports {
+                    for name in splitNames(m[1]) {
+                        if let alias = capture(name, pattern: #"(\w+)\s+as\s+(\w+)"#) {
+                            output.append("module.exports.\(alias[2]) = \(alias[1]);")
+                        } else {
+                            let trimmedName = name.trimmingCharacters(in: .whitespaces)
+                            output.append("module.exports.\(trimmedName) = \(trimmedName);")
+                        }
+                    }
+                }
                 continue
             }
 
             output.append(line)
         }
 
-        return output.joined(separator: "\n")
+        // Emit module.exports for collected named exports (export const/let/var)
+        if collectExports {
+            for name in namedExports {
+                output.append("module.exports.\(name) = \(name);")
+            }
+        }
+
+        return (output.joined(separator: "\n"), namedExports)
     }
 
-    // Returns capture groups [fullMatch, group1, group2, ...] or nil if no match.
+    // MARK: - Helpers
+
     private static func capture(_ s: String, pattern: String) -> [String]? {
         guard let re = try? NSRegularExpression(pattern: pattern),
               let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s))
@@ -99,12 +164,10 @@ enum ModuleBundler {
         }
     }
 
-    // Split comma-separated named import list, trimming whitespace.
     private static func splitNames(_ s: String) -> [String] {
         s.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 
-    // Emit a var declaration for one named import, handling "foo as bar" aliases.
     private static func namedImport(_ name: String, from tmp: String) -> String {
         if let m = capture(name, pattern: #"(\w+)\s+as\s+(\w+)"#) {
             return "var \(m[2]) = \(tmp).\(m[1]);"
@@ -124,19 +187,67 @@ enum ModuleBundler {
         return Array(Set(names).compactMap { VendorPackage.package(for: $0) })
     }
 
+    // MARK: - JS Templates
+
     private static let commonJSSetup = """
     var module = { exports: {} };
     var exports = module.exports;
     """
 
     private static let loomCoreStub = """
+    var __loom_config__ = null;
     var __loom_core__ = {
-      loom: function(handler, config) { return handler; }
+      loom: function(handler, config) {
+        if (config) __loom_config__ = config;
+        return handler;
+      }
     };
     """
 
-    private static func requireShim(entries: [String]) -> String {
-        let vendorMap = entries.isEmpty ? "" : entries.joined(separator: ",\n  ")
+    // @loom/widget module — 22 w.* builder functions as a self-contained IIFE.
+    // Assigns to globalThis.__loom_widget__ which the requireShim maps to '@loom/widget'.
+    private static let loomWidgetModule = """
+    (function() {
+      'use strict';
+      function n(type, props, children) {
+        var obj = { type: type, props: props || {} };
+        if (children !== undefined) obj.children = children;
+        return obj;
+      }
+      var w = {
+        vstack:      function(c, p) { return n('vstack', p, c); },
+        hstack:      function(c, p) { return n('hstack', p, c); },
+        zstack:      function(c, p) { return n('zstack', p, c); },
+        spacer:      function(p)    { return n('spacer', p); },
+        divider:     function(p)    { return n('divider', p); },
+        text:        function(x, p) { if (x && typeof x === 'object') return n('text', x); return n('text', Object.assign({ content: String(x) }, p || {})); },
+        label:       function(p)    { return n('label', p); },
+        image:       function(u, p) { if (u && typeof u === 'object') return n('image', u); return n('image', Object.assign({ url: String(u) }, p || {})); },
+        icon:        function(x, p) { if (x && typeof x === 'object') return n('icon', x); return n('icon', Object.assign({ name: String(x) }, p || {})); },
+        link:        function(p)    { return n('link', p); },
+        ring:        function(p)    { return n('ring', p); },
+        gauge:       function(p)    { return n('gauge', p); },
+        lineChart:   function(p)    { return n('lineChart', p); },
+        barChart:    function(p)    { return n('barChart', p); },
+        sparkline:   function(p)    { return n('sparkline', p); },
+        progressBar: function(p)    { return n('progressBar', p); },
+        rectangle:   function(c, p) { return n('rectangle', p, c); },
+        capsule:     function(c, p) { return n('capsule', p, c); },
+        circle:      function(c, p) { return n('circle', p, c); },
+        gradient:    function(p)    { return n('gradient', p); },
+        button:      function(p)    { return n('button', p); },
+        toggle:      function(p)    { return n('toggle', p); }
+      };
+      globalThis.__loom_widget__ = { w: w };
+    })();
+    """
+
+    private static func requireShim(entries: [String], includeWidget: Bool) -> String {
+        var allEntries = entries
+        if includeWidget {
+            allEntries.insert("'@loom/widget': __loom_widget__", at: 0)
+        }
+        let vendorMap = allEntries.isEmpty ? "" : allEntries.joined(separator: ",\n  ")
         return """
         var __loom_require_map__ = {
           '@loom/core': __loom_core__,
@@ -164,6 +275,36 @@ enum ModuleBundler {
         .catch(function(e) {
           __loom_error__ = e && e.message ? e.message : String(e);
         });
+    })();
+    """
+
+    // Calls each named size export (small/medium/large/extraLarge) as a factory function
+    // with its own ctx (matching widgetSize), collects the component trees, and assigns
+    // the serialised result to __loom_widget_result__.
+    private static let widgetExecutionFooter = """
+    (function() {
+      var __sizes__ = ['small', 'medium', 'large', 'extraLarge'];
+      var __result__ = {};
+      __result__.refreshAfter = (__loom_config__ && __loom_config__.refreshAfter) ? __loom_config__.refreshAfter : null;
+      for (var i = 0; i < __sizes__.length; i++) {
+        var size = __sizes__[i];
+        var fn = module.exports[size];
+        if (typeof fn === 'function') {
+          try {
+            var sizeCtx = { input: ctx.input, trigger: 'widgetRender', widgetSize: size };
+            __result__[size] = fn(sizeCtx);
+          } catch (e) {
+            __result__[size] = null;
+          }
+        } else {
+          __result__[size] = null;
+        }
+      }
+      try {
+        __loom_widget_result__ = JSON.stringify(__result__);
+      } catch (e) {
+        __loom_error__ = 'Widget serialisation failed: ' + (e && e.message ? e.message : String(e));
+      }
     })();
     """
 }

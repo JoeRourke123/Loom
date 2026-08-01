@@ -9,14 +9,58 @@
 /* Begin PBXBuildFile section */
 		AA000001AA000001AA000001 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = AA000002AA000002AA000002 /* GRDB */; };
 		D88B75A62FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone in Frameworks */ = {isa = PBXBuildFile; productRef = D88B75A52FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone */; };
+		D88B763D2FE20503003ABAF4 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D88B763C2FE20503003ABAF4 /* WidgetKit.framework */; };
+		D88B763F2FE20503003ABAF4 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D88B763E2FE20503003ABAF4 /* SwiftUI.framework */; };
+		D88B76502FE20504003ABAF4 /* LoomWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D88B763A2FE20503003ABAF4 /* LoomWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D8F3788C2FDE460400CD6EC9 /* Runestone in Frameworks */ = {isa = PBXBuildFile; productRef = 5F7D4AF8A6C34ED693AA6746 /* Runestone */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		D88B764E2FE20504003ABAF4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D8F3784F2FDE3BAF00CD6EC9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D88B76392FE20503003ABAF4;
+			remoteInfo = LoomWidgetExtensionExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D88B76552FE20504003ABAF4 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				D88B76502FE20504003ABAF4 /* LoomWidgetExtensionExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		D88B763A2FE20503003ABAF4 /* LoomWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LoomWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D88B763C2FE20503003ABAF4 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		D88B763E2FE20503003ABAF4 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		D88B76562FE20524003ABAF4 /* LoomWidgetExtensionExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LoomWidgetExtensionExtension.entitlements; sourceTree = "<group>"; };
 		D8F378572FDE3BAF00CD6EC9 /* Loom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Loom.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D88B76542FE20504003ABAF4 /* Exceptions for "LoomWidgetExtension" folder in "LoomWidgetExtensionExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D88B76392FE20503003ABAF4 /* LoomWidgetExtensionExtension */;
+		};
+		D88B76582FE20584003ABAF4 /* Exceptions for "Loom" folder in "LoomWidgetExtensionExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Widget/WidgetNode.swift,
+				Widget/WidgetView.swift,
+			);
+			target = D88B76392FE20503003ABAF4 /* LoomWidgetExtensionExtension */;
+		};
 		D8F378642FDE3BB000CD6EC9 /* Exceptions for "Loom" folder in "Loom" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -27,10 +71,19 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		D88B76402FE20503003ABAF4 /* LoomWidgetExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D88B76542FE20504003ABAF4 /* Exceptions for "LoomWidgetExtension" folder in "LoomWidgetExtensionExtension" target */,
+			);
+			path = LoomWidgetExtension;
+			sourceTree = "<group>";
+		};
 		D8F378592FDE3BAF00CD6EC9 /* Loom */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				D8F378642FDE3BB000CD6EC9 /* Exceptions for "Loom" folder in "Loom" target */,
+				D88B76582FE20584003ABAF4 /* Exceptions for "Loom" folder in "LoomWidgetExtensionExtension" target */,
 			);
 			path = Loom;
 			sourceTree = "<group>";
@@ -38,6 +91,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		D88B76372FE20503003ABAF4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				D88B763F2FE20503003ABAF4 /* SwiftUI.framework in Frameworks */,
+				D88B763D2FE20503003ABAF4 /* WidgetKit.framework in Frameworks */,
+			);
+		};
 		D8F378542FDE3BAF00CD6EC9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
@@ -49,10 +109,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		D88B763B2FE20503003ABAF4 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				D88B763C2FE20503003ABAF4 /* WidgetKit.framework */,
+				D88B763E2FE20503003ABAF4 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		D8F3784E2FDE3BAF00CD6EC9 = {
 			isa = PBXGroup;
 			children = (
+				D88B76562FE20524003ABAF4 /* LoomWidgetExtensionExtension.entitlements */,
 				D8F378592FDE3BAF00CD6EC9 /* Loom */,
+				D88B76402FE20503003ABAF4 /* LoomWidgetExtension */,
+				D88B763B2FE20503003ABAF4 /* Frameworks */,
 				D8F378582FDE3BAF00CD6EC9 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -61,6 +133,7 @@
 			isa = PBXGroup;
 			children = (
 				D8F378572FDE3BAF00CD6EC9 /* Loom.app */,
+				D88B763A2FE20503003ABAF4 /* LoomWidgetExtensionExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -68,6 +141,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		D88B76392FE20503003ABAF4 /* LoomWidgetExtensionExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D88B76512FE20504003ABAF4 /* Build configuration list for PBXNativeTarget "LoomWidgetExtensionExtension" */;
+			buildPhases = (
+				D88B76362FE20503003ABAF4 /* Sources */,
+				D88B76372FE20503003ABAF4 /* Frameworks */,
+				D88B76382FE20503003ABAF4 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				D88B76402FE20503003ABAF4 /* LoomWidgetExtension */,
+			);
+			name = LoomWidgetExtensionExtension;
+			productName = LoomWidgetExtensionExtension;
+			productReference = D88B763A2FE20503003ABAF4 /* LoomWidgetExtensionExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		D8F378562FDE3BAF00CD6EC9 /* Loom */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D8F378652FDE3BB000CD6EC9 /* Build configuration list for PBXNativeTarget "Loom" */;
@@ -75,8 +166,12 @@
 				D8F378532FDE3BAF00CD6EC9 /* Sources */,
 				D8F378542FDE3BAF00CD6EC9 /* Frameworks */,
 				D8F378552FDE3BAF00CD6EC9 /* Resources */,
+				D88B76552FE20504003ABAF4 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
+			);
+			dependencies = (
+				D88B764F2FE20504003ABAF4 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				D8F378592FDE3BAF00CD6EC9 /* Loom */,
@@ -101,6 +196,9 @@
 				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
+					D88B76392FE20503003ABAF4 = {
+						CreatedOnToolsVersion = 27.0;
+					};
 					D8F378562FDE3BAF00CD6EC9 = {
 						CreatedOnToolsVersion = 27.0;
 					};
@@ -126,11 +224,17 @@
 			projectRoot = "";
 			targets = (
 				D8F378562FDE3BAF00CD6EC9 /* Loom */,
+				D88B76392FE20503003ABAF4 /* LoomWidgetExtensionExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		D88B76382FE20503003ABAF4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 		D8F378552FDE3BAF00CD6EC9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
@@ -139,6 +243,11 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		D88B76362FE20503003ABAF4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 		D8F378532FDE3BAF00CD6EC9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -146,7 +255,79 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		D88B764F2FE20504003ABAF4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D88B76392FE20503003ABAF4 /* LoomWidgetExtensionExtension */;
+			targetProxy = D88B764E2FE20504003ABAF4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		D88B76522FE20504003ABAF4 /* Debug configuration for PBXNativeTarget "LoomWidgetExtensionExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = LoomWidgetExtensionExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = FK89WR34V8;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LoomWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LoomWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.joerourke.Loom.LoomWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D88B76532FE20504003ABAF4 /* Release configuration for PBXNativeTarget "LoomWidgetExtensionExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = LoomWidgetExtensionExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = FK89WR34V8;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LoomWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LoomWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.joerourke.Loom.LoomWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		D8F378662FDE3BB000CD6EC9 /* Debug configuration for PBXNativeTarget "Loom" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -182,6 +363,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.joerourke.Loom;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -227,6 +409,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.joerourke.Loom;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -361,6 +544,14 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		D88B76512FE20504003ABAF4 /* Build configuration list for PBXNativeTarget "LoomWidgetExtensionExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D88B76522FE20504003ABAF4 /* Debug configuration for PBXNativeTarget "LoomWidgetExtensionExtension" */,
+				D88B76532FE20504003ABAF4 /* Release configuration for PBXNativeTarget "LoomWidgetExtensionExtension" */,
+			);
+			defaultConfigurationName = Release;
+		};
 		D8F378522FDE3BAF00CD6EC9 /* Build configuration list for PBXProject "Loom" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

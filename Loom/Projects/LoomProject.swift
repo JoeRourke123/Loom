@@ -14,4 +14,14 @@ struct LoomProject: Identifiable, Hashable {
     var mainFileURL: URL {
         folderURL.appendingPathComponent("main.ts")
     }
+
+    var widgetFileURL: URL {
+        folderURL.appendingPathComponent("widget.ts")
+    }
+
+    var hasWidget: Bool {
+        FileManager.default.fileExists(atPath: widgetFileURL.path)
+    }
 }
+
+extension LoomProject: Sendable {}

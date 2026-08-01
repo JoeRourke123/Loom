@@ -55,17 +55,17 @@ Each milestone is a coherent, testable slice of the app. "Done means" is the acc
 ## Milestone 4 — Full Native Bridge
 **Done means:** All `Loom.*` namespaces implemented and usable from scripts. `Loom.ai` connects to Foundation Models v2 with provider switching.
 
-- [ ] `Loom.health` — getQuantity, saveWorkout (HealthKit)
-- [ ] `Loom.location` — current() (CoreLocation)
-- [ ] `Loom.contacts` — search, create, update, delete (CNContactStore)
-- [ ] `Loom.calendar` — events + reminders CRUD (EventKit)
-- [ ] `Loom.camera` — capture, ocr, barcode
-- [ ] `Loom.photos` — pick, save (PHPhotoLibrary)
-- [ ] `Loom.share` — input() for share sheet trigger
-- [ ] `Loom.clipboard` — read, write (UIPasteboard)
-- [ ] `Loom.speech` — speak (TTS), recognize (STT)
-- [ ] `Loom.device` — batteryLevel, isCharging, model, systemVersion
-- [ ] `Loom.ai` — complete, chat, embed, search; Foundation Models v2 LanguageModel protocol; provider switching (auto/apple/claude/gemini)
+- [x] `Loom.health` — getQuantity, saveWorkout (HealthKit)
+- [x] `Loom.location` — current() (CoreLocation)
+- [x] `Loom.contacts` — search, create, update, delete (CNContactStore)
+- [x] `Loom.calendar` — events + reminders CRUD (EventKit)
+- [x] `Loom.camera` — capture, ocr, barcode
+- [x] `Loom.photos` — pick, save (PHPhotoLibrary)
+- [x] `Loom.share` — input() for share sheet trigger
+- [x] `Loom.clipboard` — read, write (UIPasteboard)
+- [x] `Loom.speech` — speak (TTS), recognize (STT)
+- [x] `Loom.device` — batteryLevel, isCharging, model, systemVersion
+- [x] `Loom.ai` — complete, chat, embed, search; Foundation Models v2 LanguageModel protocol; provider switching (auto/apple/claude/gemini)
 
 ---
 
@@ -86,16 +86,20 @@ Each milestone is a coherent, testable slice of the app. "Done means" is the acc
 ---
 
 ## Milestone 6 — Widget System
-**Done means:** `widget.ts` produces a functional WidgetKit widget with all component types, interactive buttons, and all four size variants.
+**Done means:** `widget.ts` produces a functional WidgetKit widget with all component types, interactive buttons/toggles, all four size variants, and a live in-app preview panel.
 
-- [ ] Widget extension target + App Group container setup
-- [ ] `w.*` component builder functions in `@loom/core`
-- [ ] Component tree → JSON serialisation
-- [ ] Swift widget renderer — all components (layout, content, data viz, decoration, interactive)
-- [ ] Widget App Intent — button/toggle → App Group write → WidgetCenter.reloadTimelines()
-- [ ] `Loom.widget.setState(key, value)` — write to App Group from script
-- [ ] Widget configuration via App Intents (`configIntent` + `ctx.widgetConfig`)
-- [ ] `ctx.widgetSize` — size-adaptive layouts (small/medium/large/extraLarge)
+- [x] Widget extension target + App Group container setup (both targets share `group.{bundleId}.loom`) — App Group entitlement added to main target; extension target still needed
+- [x] `@loom/widget` JS module — all 22 `w.*` builder functions; pre-bundled IIFE in `requireShim`
+- [x] `ModuleBundler` named export support — `export const` + `export { }` → `module.exports.*`; `widgetExecutionFooter` calling each size factory
+- [x] `WidgetScriptRunner` — auto-runs `widget.ts` after successful `main.ts`; writes trees to App Group; calls `WidgetCenter.reloadTimelines()`
+- [x] `WidgetNode` Swift model — `[String: Any]`-backed struct for all 22 components; `WidgetResult` decodes full footer output
+- [x] `WidgetView` SwiftUI renderer — all components; shared source between main app + extension
+- [x] Widget extension: `LoomWidgetProvider` (AppIntentTimelineProvider) + `LoomWidgetConfiguration`
+- [x] Project picker: `SelectProjectIntent` + `LoomProjectEntity` + `LoomProjectQuery` (reads `loom.projects` from App Group)
+- [x] Interactive intents: `WidgetButtonIntent` + `WidgetToggleIntent` → write to `Loom.kv` + reload timelines
+- [x] In-app preview panel — tab per exported size, device frame, reads from App Group JSON
+- [x] `LoomProject.hasWidget` + `ProjectStore` App Group index (`loom.projects`)
+- [x] `RunTrigger.widgetAction` case added
 
 ---
 

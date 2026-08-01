@@ -29,11 +29,15 @@ final class ProjectStore {
 
     // MARK: - Public API
 
-    func createProject(name: String) throws {
+    func createProject(name: String, template: ProjectTemplate? = nil) throws {
         guard let containerURL else { return }
         let folderURL = containerURL.appendingPathComponent(name)
         try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: false)
-        try ProjectScaffolder.scaffold(into: folderURL, projectName: name)
+        if let template {
+            try ProjectScaffolder.scaffold(into: folderURL, projectName: name, template: template)
+        } else {
+            try ProjectScaffolder.scaffold(into: folderURL, projectName: name)
+        }
         loadProjects()
     }
 
@@ -69,6 +73,17 @@ final class ProjectStore {
 
         Task { @MainActor in
             self.projects = loaded
+        }
+
+        updateAppGroupIndex(projects: loaded)
+    }
+
+    private func updateAppGroupIndex(projects: [LoomProject]) {
+        let widgetProjects = projects.filter { $0.hasWidget }.map { $0.name }
+        guard let defaults = UserDefaults(suiteName: "group.uk.co.joerourke.loom") else { return }
+        if let data = try? JSONSerialization.data(withJSONObject: widgetProjects),
+           let json = String(data: data, encoding: .utf8) {
+            defaults.set(json, forKey: "loom.projects")
         }
     }
 

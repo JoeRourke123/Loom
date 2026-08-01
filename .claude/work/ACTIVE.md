@@ -26,10 +26,222 @@ Concrete description. No vague language. If it touches UI, describe the exact vi
 
 ---
 
-_M4 in progress._
+_M6 and M4 shipped — specs archived below for reference. M5 not yet started._
 
 ---
 
+<!-- M6 pre-flight archived below for reference — all items shipped -->
+
+<!--
+## M6 — Widget System — pre-flight
+Milestone: M6 — Widget System
+Backlog items: Widget extension target, component builder (`w.*`), component tree serialisation, Swift widget renderer, Widget App Intent, `Loom.widget.setState`, widget configuration, `ctx.widgetSize`
+
+**Done means:** `widget.ts` produces a functional WidgetKit widget with all component types, interactive buttons/toggles, all four size variants, and a live in-app preview panel.
+
+---
+
+### Execution model
+
+`main.ts` runs (manual / cron / shortcut) → returns a value → Loom auto-runs `widget.ts` with `ctx.input` set to that return value → `widget.ts` calls each named size export as a function → serialises all returned trees → writes to App Group → calls `WidgetCenter.reloadTimelines()`.
+
+`widget.ts` runs exclusively in the main app process (JSC). The widget extension is a pure SwiftUI renderer: it reads JSON from the App Group and renders it — no JS, no logic.
+
+Opt-in: presence of a `widget.ts` file in the project folder. No flag in `loom()` options needed.
+
+---
+
+### `widget.ts` shape
+
+```ts
+import { loom } from '@loom/core'
+import { w } from '@loom/widget'
+
+// Named exports — each is a factory function receiving ctx
+export const small = (ctx) =>
+  w.vstack([
+    w.text(ctx.input.temp + '°', { font: 'largeTitle' }),
+    w.text(ctx.input.city, { font: 'caption', color: 'secondary' })
+  ], { background: 'blue' })   // background on root = .containerBackground()
+
+export const medium = (ctx) =>
+  w.hstack([
+    w.vstack([w.text(ctx.input.temp + '°', { font: 'title' })]),
+    w.sparkline({ data: ctx.input.history, color: 'cyan' })
+  ])
+
+// loom() carries widget-level config; handler is unused
+export default loom(async () => {}, {
+  refreshAfter: 3600  // seconds — omit to default to .never policy
+})
+```
+
+- Each named export (`small`, `medium`, `large`, `extraLarge`) is a function `(ctx: WidgetCtx) => ComponentNode`
+- `ctx` in widget.ts: `{ input, widgetSize, trigger }` — `trigger` is `'widgetRender'`
+- Missing size export → "not available" placeholder for that size in the extension
+- `ctx.widgetSize` is set to the appropriate size string when Swift calls each factory
+- Shared utility code can live in a third file (e.g. `lib.ts`) imported by both `main.ts` and `widget.ts`
+
+---
+
+### `@loom/widget` JS module
+
+Pre-bundled IIFE registered in `requireShim` under `'@loom/widget'`. All builders return plain serialisable objects `{ type, props, children? }`.
+
+**Layout:**
+```ts
+w.vstack(children, props?)  // props: { spacing?, alignment?, padding?, background?, opacity?, cornerRadius? }
+w.hstack(children, props?)
+w.zstack(children, props?)
+w.spacer(props?)            // { minLength? }
+w.divider(props?)           // { color? }
+```
+
+**Content:**
+```ts
+w.text(content, props?)     // { font?, color?, bold?, italic?, alignment?, lineLimit? }
+w.label(props)              // { icon: string (SF Symbol), title: string, subtitle?: string, color? }
+w.image(url, props?)        // { width?, height?, cornerRadius? }
+w.icon(name, props?)        // SF Symbol name + { size?, color? }
+w.link(props)               // { label: string, url: string, font?, color? }
+                            // url: 'loom://run?script=…' | 'loom://open?script=…' | external URL
+```
+
+**Data viz:**
+```ts
+w.ring(props)               // { value: number, total: number, color?, label?, caption? }
+w.gauge(props)              // { value: number, min?, max?, label?, color? }
+w.lineChart(props)          // { data: [{ label, value }], color?, smooth? }
+w.barChart(props)           // { data: [{ label, value }], color? }
+w.sparkline(props)          // { data: [{ label, value }], color? }
+w.progressBar(props)        // { value: number, total?, color?, label? }
+```
+
+**Decoration:**
+```ts
+w.rectangle(children, props?)  // container — { color?, cornerRadius?, padding? }
+w.capsule(children, props?)    // container — { color?, padding? }
+w.circle(children, props?)     // container — { color?, size? }
+w.gradient(props)              // value for background: prop — { colors: string[], direction?: 'horizontal'|'vertical'|'diagonal' }
+```
+
+**Interactive:**
+```ts
+w.button(props)   // { label: string, kvKey: string, color?, font? }
+w.toggle(props)   // { label: string, kvKey: string, value: boolean, color? }
+```
+
+**Colours** (semantic only, always dark-mode safe):
+`'primary' | 'secondary' | 'tertiary' | 'accent' | 'red' | 'orange' | 'yellow' | 'green' | 'teal' | 'blue' | 'indigo' | 'purple' | 'pink' | 'brown' | 'white' | 'black' | 'clear'`
+
+**Fonts** (iOS text styles):
+`'largeTitle' | 'title' | 'title2' | 'title3' | 'headline' | 'body' | 'callout' | 'subheadline' | 'footnote' | 'caption'`
+
+**Gradient as background value:**
+```ts
+w.vstack([...], { background: w.gradient({ colors: ['blue', 'purple'], direction: 'vertical' }) })
+```
+
+**TypeScript types:** post-M6 DX enhancement.
+
+---
+
+### App Group schema
+
+Container: `group.{bundleId}.loom`
+
+Key per project: `loom.widget.{projectName}`
+```json
+{
+  "small":      { "type": "vstack", "props": { "background": "blue" }, "children": [...] },
+  "medium":     { ... },
+  "large":      null,
+  "extraLarge": null,
+  "updatedAt":  "2026-06-16T12:00:00Z"
+}
+```
+
+Project index key: `loom.projects`
+```json
+["Weather", "Habits", "Finance"]
+```
+Updated by main app whenever `widget.ts` presence changes. Used by `EntityQuery` to enumerate projects in widget edit mode.
+
+---
+
+### Interactive components (v1)
+
+Button/toggle intents write to `Loom.kv` (`NSUbiquitousKeyValueStore`) and call `WidgetCenter.reloadTimelines()`. No JS runs. The updated KV value is picked up by `ctx.input` the next time `main.ts` runs.
+
+- `w.button({ label, kvKey })` → intent writes `Date.now()` (ms timestamp) to `Loom.kv[kvKey]`
+- `w.toggle({ label, kvKey, value })` → intent writes `!value` to `Loom.kv[kvKey]`
+
+Toggle visual state reflects `value` prop (from `ctx.input`) until `main.ts` next runs. Not optimistic.
+
+KV namespace: same as `Loom.kv` — keys are scoped to the project (`{projectName}:{kvKey}`).
+
+---
+
+### WidgetKit timeline policy
+
+- Default: `.never` — main app always calls `WidgetCenter.reloadTimelines()` after a run
+- If `refreshAfter` is set in `loom()` options: `TimelineReloadPolicy.after(Date(timeIntervalSinceNow: refreshAfter))`
+- Extension uses `AppIntentTimelineProvider` (required for interactive widgets)
+
+---
+
+### Project selection
+
+Widget uses `IntentConfiguration` with a `SelectProjectIntent`. The intent has a single project parameter backed by `LoomProjectEntity` + `LoomProjectQuery`. The query reads `loom.projects` from App Group (no main app process needed at query time).
+
+The widget gallery shows one kind: "Loom Widget". User picks their project in widget edit mode.
+
+---
+
+### Container background
+
+The outermost layout component's `background` prop maps to `.containerBackground(for: .widget)` in Swift. If absent, Swift falls back to `.containerBackground(.background, for: .widget)`.
+
+---
+
+### In-app preview
+
+Preview panel appears in the project detail view (below the run button) after at least one successful run that produced widget output.
+
+- Tab bar: one tab per size the script exports (no tabs for missing sizes)
+- Each tab renders the stored component tree via the shared `WidgetView` SwiftUI renderer
+- Device frame around the widget at correct WidgetKit dimensions
+- Updates automatically after each run (reads from App Group JSON)
+
+---
+
+### Swift implementation tasks (ordered)
+
+1. **Xcode: widget extension target** — `LoomWidgetExtension` target + App Group entitlement on both targets (`group.{bundleId}.loom`)
+2. **`@loom/widget` JS module** — 22 `w.*` builder functions as plain-object factories; pre-bundled IIFE; registered in `requireShim`
+3. **`ModuleBundler` named export support** — extend `esmToCJS` to handle `export const foo = expr` → `module.exports.foo = expr` and `export { a, b }`; add `widgetExecutionFooter` that calls each named size export as a function and returns `{ small, medium, large, extraLarge }`
+4. **`WidgetScriptRunner`** — after successful `main.ts` run, if `widget.ts` exists: compile + bundle (widget mode) → execute → collect size trees → serialise → write to App Group → `WidgetCenter.reloadTimelines()`
+5. **`WidgetNode` Swift model** — `indirect enum WidgetNode: Codable` (or struct hierarchy) for all 22 components
+6. **`WidgetView` SwiftUI renderer** — recursive `@ViewBuilder` for all components; colour/font helpers; Swift Charts for `lineChart`/`barChart`; custom Canvas for `ring`, `gauge`, `sparkline`, `progressBar`; shared source files added to both targets
+7. **Widget extension: provider + configuration** — `LoomWidgetProvider: AppIntentTimelineProvider`, `LoomWidgetConfiguration: Widget`, placeholder + snapshot views
+8. **Project picker: `SelectProjectIntent` + `LoomProjectEntity` + `LoomProjectQuery`** — reads `loom.projects` from App Group
+9. **Interactive intents: `WidgetButtonIntent` + `WidgetToggleIntent`** — write to `NSUbiquitousKeyValueStore` + reload timelines
+10. **In-app preview panel** — tab bar per exported size, `WidgetView` rendering from App Group JSON, device frame
+11. **`LoomProject.hasWidget`** — computed property checking for `widget.ts` presence
+12. **`ProjectStore` App Group index** — maintain `loom.projects` key when project list or `widget.ts` presence changes
+13. **`RunTrigger.widgetAction`** — new case (for future use when button reruns main.ts)
+14. **`ProjectScaffolder`** — no starter `widget.ts` by default; user creates it manually (avoids auto-adding widget complexity to every new project)
+
+**Open questions:** None — all resolved in planning session 2026-06-16.
+
+**Dependencies:** M4 should land first (all bridge namespaces needed for `widget.ts` scripts). M6 can begin with tasks 1–4 in parallel with M4 completion.
+-->
+
+---
+
+<!-- M4 pre-flight archived below for reference — all items shipped -->
+
+<!--
 ## M4 — Full Native Bridge — pre-flight
 
 Milestone: M4 — Full Native Bridge  
@@ -66,6 +278,7 @@ Backlog items: Loom.device, Loom.clipboard, Loom.location, Loom.speech, Loom.con
 **LoomBridge wiring** — All new bridges added to LoomBridge.init + inject(). Bridges that need health permission types receive them via a `config: LoomConfig` parameter passed from ScriptRunner (parsed from loom() static config). For M4, pass an empty config if static extraction isn't done yet — inline prompts still work.
 
 **Open questions:** None — all resolved above.
+-->
 
 ---
 

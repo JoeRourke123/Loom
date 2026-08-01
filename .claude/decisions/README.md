@@ -42,5 +42,6 @@ What this creates, closes off, or requires going forward. Include trade-offs hon
 | 001 | [SWC WASM as on-device TypeScript compiler](001-swc-wasm-compiler.md) | accepted |
 | 002 | [JavaScriptCore as script runtime (one context per run)](002-jsc-one-context-per-run.md) | accepted |
 | 003 | [loom() wrapper as sole config mechanism (no loom.config.json)](003-loom-wrapper-config.md) | accepted |
-| 004 | [Widget data via JSON in App Group container (no JSC in extension)](004-widget-json-appgroup.md) | accepted |
+| 004 | [Widget data via JSON in App Group container (no JSC in extension)](004-widget-json-appgroup.md) | partially superseded by ADR-006 |
 | 005 | [Foundation Models v2 LanguageModel protocol for all AI providers](005-foundation-models-v2.md) | accepted |
+| 006 | [M6 widget execution model — pipe, named exports, kv state, project picker](006-widget-execution-model.md) | accepted |

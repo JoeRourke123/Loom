@@ -1,6 +1,6 @@
 # ADR-004: Widget data via JSON in App Group container — no JSC in widget extension
 Date: 2026-06-14
-Status: accepted
+Status: partially superseded by ADR-006 (interactive state model and execution pipeline details)
 
 ## Context
 WidgetKit extensions run in a separate process that is memory-constrained and cannot be relied upon to start the main app. Options for getting script output into a widget:
