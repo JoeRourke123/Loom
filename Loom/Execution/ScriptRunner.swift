@@ -31,6 +31,20 @@ actor ScriptRunner {
         return session
     }
 
+    // Awaitable convenience for callers that only want the final status/result and have no
+    // need for the live session (App Intents, the URL scheme handler, the Share Extension
+    // handoff). ScriptRunnerViewModel does NOT use this — it needs the RunSession handle
+    // immediately, back on @MainActor, to bind the live Console view before the run finishes,
+    // which this single-return-at-the-end shape can't provide.
+    @discardableResult
+    func run(project: LoomProject, trigger: RunTrigger, input: [String: Any] = [:]) async -> (status: RunStatus, result: String?) {
+        let session = startRun(project: project, trigger: trigger, input: input)
+        for await _ in session.completionStream {}
+        let status = await session.status
+        let result = await session.result as? String
+        return (status, result)
+    }
+
     nonisolated private func executeOnThread(
         bundled: String,
         project: LoomProject,
