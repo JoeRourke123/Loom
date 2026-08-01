@@ -30,16 +30,11 @@ _M6 and M4 shipped — specs archived below for reference._
 
 ---
 
-## M5 — Siri & App Intents — in progress
+## M5 — Siri & App Intents — code complete, one manual step left
 
-8 of 9 backlog items shipped (see DONE.md for each, ADR-007/008/009 for the non-obvious decisions). One item remains:
+All 9 backlog items shipped (see DONE.md for each, ADR-007/008/009 for the non-obvious decisions). `LoomShareExtension` target created and `Loom.share` implemented against it (ADR-009).
 
-**Share extension** — `Loom.share` bridge + a new Share Extension Xcode target. Design is locked (ADR-009: reuses M6's App Group, hands off via `loom://share` into the existing `DeepLinkHandler`). Blocked on File → New → Target → Share Extension in Xcode — a manual/GUI step, same class as M1's entitlements and M6's widget extension target. Once the target exists:
-- `LoomShareExtension.entitlements` — only `com.apple.security.application-groups = [group.uk.co.joerourke.loom]`, no iCloud keys.
-- `ProjectStore.updateAppGroupIndex` — add a `loom.allProjects` key (all projects, distinct from M6's widget-only `loom.projects`).
-- `ShareViewController` — project picker + payload staging (inline for short text/URL, App Group file for images/long text).
-- `DeepLinkHandler` — add the `loom://share` branch.
-- `Loom/Bridge/ShareBridge.swift` — 18th bridge namespace, thin synchronous re-export of `ctx.input`.
+**Remaining before Share is runnable end-to-end:** add the App Groups capability (`group.uk.co.joerourke.loom`) to the `LoomShareExtension` target via Xcode's Signing & Capabilities — a manual step, same class as the target creation itself. Until then, App Group reads/writes in the extension no-op rather than crash, but the project picker shows nothing and staging fails.
 
 **Open questions carried over from planning, not yet resolved with the user:**
 - Slot bound for the rich intent (shipped as 4 string / 2 number / 2 boolean / 1 date — confirm or adjust).

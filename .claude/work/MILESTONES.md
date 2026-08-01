@@ -77,7 +77,7 @@ Each milestone is a coherent, testable slice of the app. "Done means" is the acc
 - [x] Zod → App Intent parameter mapping
 - [x] Intent execution pipeline — params → ctx.input → run → return result
 - [x] URL scheme handler — `loom://run?script=…&param=…`
-- [ ] Share extension — pick script, run with Loom.share.input() — design locked (ADR-009), blocked on the Xcode-GUI new-target step
+- [x] Share extension — pick script, run with Loom.share.input() — target created, code lands (ADR-009); still needs the App Groups capability added via Signing & Capabilities before it's runnable end-to-end
 - [x] Entity schema registration — register types + hydrate Spotlight index
 - [x] View Annotations — annotate output views with entity references (Database Tables rows only; KV rows and Console log lines have no reliable entity-type correlation signal without inventing one — see DONE.md)
 - [x] Siri preview panel in editor + lint warnings for vague descriptions

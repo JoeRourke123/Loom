@@ -183,3 +183,8 @@ Approach: SiriPreviewView shares EditorContainerView's existing bottom-panel slo
 
 ## M5: reconciled M6 + wrote three ADRs — 2026-08-01
 Approach: Verified, committed, and merged the M6 widget work that was sitting uncommitted in the main checkout before starting M5 (see decisions/006). Wrote ADR-007 (static config extraction mechanism), ADR-008 (generic compile-time App Intents/Entities for runtime schemas — the highest-rework-risk decision in the milestone), and ADR-009 (Share Extension process boundary, decision locked ahead of Group 6's implementation).
+
+## M5: Loom.share bridge + Share Extension — 2026-08-01
+Approach: LoomShareExtension target created via Xcode (manual step). ShareViewController builds on the SLComposeServiceViewController template — configurationItems() gives a native project-picker row (SwiftUI List via UIHostingController) rather than a custom compose screen. Content extracted in priority order (URL, image, plain text), handed off via loom://share (inline for short text/URLs, staged into the App Group container under a token for images/long text — both sides derive the same path from the token). DeepLinkHandler's loom://share branch resolves the payload, copies staged images into the project's iCloud folder, runs via ScriptRunner.run(trigger: .shareSheet). ShareBridge (Loom.share.input()) is a thin re-export of ctx.input. ProjectStore.updateAppGroupIndex gained loom.allProjects (all projects, vs. M6's widget-only loom.projects).
+
+Both Loom and LoomShareExtension schemes build clean. Not yet runnable end-to-end — the extension target still needs the App Groups capability (group.uk.co.joerourke.loom) added via Signing & Capabilities, a manual Xcode step. This completes all 9 M5 backlog items.
