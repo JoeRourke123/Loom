@@ -15,6 +15,9 @@ struct LoomApp: App {
         WindowGroup {
             AppNavigationView()
                 .environment(projectStore)
+                .onOpenURL { url in
+                    Task { await DeepLinkHandler.handle(url) }
+                }
         }
         .onChange(of: scenePhase) { _, _ in
             // Background/foreground hooks wired in M7
