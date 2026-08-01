@@ -5,6 +5,12 @@ struct LoomApp: App {
     @State private var projectStore = ProjectStore()
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        #if DEBUG
+        ConfigExtractor.runSelfCheck()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             AppNavigationView()
