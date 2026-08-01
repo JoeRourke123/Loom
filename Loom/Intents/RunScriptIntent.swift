@@ -44,5 +44,11 @@ struct LoomShortcuts: AppShortcutsProvider {
             shortTitle: "Run Script",
             systemImageName: "play.fill"
         )
+        AppShortcut(
+            intent: RunScriptWithInputIntent(),
+            phrases: ["Run \(\.$project) with input in \(.applicationName)"],
+            shortTitle: "Run Script with Input",
+            systemImageName: "play.circle.fill"
+        )
     }
 }

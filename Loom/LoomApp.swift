@@ -8,6 +8,7 @@ struct LoomApp: App {
     init() {
         #if DEBUG
         ConfigExtractor.runSelfCheck()
+        IntentSlotMapping.runSelfCheck()
         #endif
     }
 
