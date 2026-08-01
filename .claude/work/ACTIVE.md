@@ -26,7 +26,26 @@ Concrete description. No vague language. If it touches UI, describe the exact vi
 
 ---
 
-_M6 and M4 shipped — specs archived below for reference. M5 not yet started._
+_M6 and M4 shipped — specs archived below for reference._
+
+---
+
+## M5 — Siri & App Intents — in progress
+
+8 of 9 backlog items shipped (see DONE.md for each, ADR-007/008/009 for the non-obvious decisions). One item remains:
+
+**Share extension** — `Loom.share` bridge + a new Share Extension Xcode target. Design is locked (ADR-009: reuses M6's App Group, hands off via `loom://share` into the existing `DeepLinkHandler`). Blocked on File → New → Target → Share Extension in Xcode — a manual/GUI step, same class as M1's entitlements and M6's widget extension target. Once the target exists:
+- `LoomShareExtension.entitlements` — only `com.apple.security.application-groups = [group.uk.co.joerourke.loom]`, no iCloud keys.
+- `ProjectStore.updateAppGroupIndex` — add a `loom.allProjects` key (all projects, distinct from M6's widget-only `loom.projects`).
+- `ShareViewController` — project picker + payload staging (inline for short text/URL, App Group file for images/long text).
+- `DeepLinkHandler` — add the `loom://share` branch.
+- `Loom/Bridge/ShareBridge.swift` — 18th bridge namespace, thin synchronous re-export of `ctx.input`.
+
+**Open questions carried over from planning, not yet resolved with the user:**
+- Slot bound for the rich intent (shipped as 4 string / 2 number / 2 boolean / 1 date — confirm or adjust).
+- `RunTrigger` for App-Intent-originated runs collapses to `.shortcut` (leaves `.siri` unused) — confirm, or point to a real Siri-vs-Shortcuts signal.
+- `entities` config shape (`{ <typeName>: { displayName, fields, provider } }`) — designed from scratch, no prior art; confirm before scripts start depending on it.
+- Config-extraction safety — confirmed reusing ADR-002's "no timeout, memory-guard only" stance rather than new watchdog infra.
 
 ---
 

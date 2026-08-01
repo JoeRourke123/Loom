@@ -154,3 +154,32 @@ Approach: WidgetIntents.swift compiled into both targets (via shared source in L
 
 ## M6: In-app widget preview panel — 2026-06-16
 Approach: WidgetPreviewPanel sheet in EditorContainerView (toolbar button visible when project.hasWidget). Reads WidgetResult from App Group after each run via refreshToken UUID. Segmented picker for available sizes; WidgetView rendered at correct WidgetKit dimensions with rounded rect clip + shadow.
+
+---
+
+## M5: main.ts static config extraction — 2026-08-01
+Approach: ConfigExtractor slices the loom() call's config-literal source text via a hand-written brace/paren/bracket/string/comment-aware scanner (no AST vendored — SWC's WASM binding only exposes transformSync), then evaluates the slice in a fresh Loom-free JSContext with zod.js preloaded. Zod v4's `_zod.def`/`.shape`/`.description` internals (confirmed against the vendored bundle) are walked into JSON, decoded into LoomConfig. See ADR-007.
+
+## M5: identity resolver + awaitable ScriptRunner.run() — 2026-08-01
+Approach: LoomProjectResolver mirrors ProjectStore's container-scan logic without the NSMetadataQuery observation machinery, for callers outside the SwiftUI environment. ScriptRunner.run(project:trigger:input:) wraps startRun()+completionStream draining for headless callers; ScriptRunnerViewModel deliberately NOT switched to it — it needs the live RunSession handle immediately for the Console view and WidgetScriptRunner chaining.
+
+## M5: URL scheme handler (loom://run) — 2026-08-01
+Approach: CFBundleURLTypes registered (scheme "loom"), .onOpenURL in LoomApp routes to DeepLinkHandler. Headless execution via ScriptRunner.run(trigger: .urlScheme); reports completion via local notification, no UI navigation.
+
+## M5: auto intent (RunScriptIntent) + AppShortcuts — 2026-08-01
+Approach: RunScriptIntent (project-only param, openAppWhenRun = true). LoomProjectEntity/LoomProjectQuery is a main-app-target-only AppEntity backed by LoomProjectResolver.allProjects() — independent from M6's widget-extension LoomProjectEntity (that one runs without the main app and reads the App Group index). IntentResultDecoder does a best-effort JSON-to-primitive unwrap of __loom_result__ for returnsResult projects.
+
+## M5: rich intent (RunScriptWithInputIntent) — 2026-08-01
+Approach: App Intent parameters are compile-time constants — no way to synthesize per-project parameter types at runtime. RunScriptWithInputIntent exposes a bounded fixed slot set (4 string, 2 number, 2 boolean, 1 date); IntentSlotMapping.assign() deterministically maps a project's declared intent.inputs, in order, onto free slots of matching type, dropping the overflow. perform() rebuilds ctx.input keyed by the real Zod field names. See ADR-008.
+
+## M5: entity schemas + Spotlight indexing — 2026-08-01
+Approach: main.ts bundling flipped to collectExports: true so provider exports land on module.exports. ModuleBundler.executionFooter gained an entity-collection pass, chained so __loom_result__ is set only after entity collection settles (drain-loop ordering, not a separate flag). EntityIndexer builds CSSearchableItems ({id, ...fields} record convention), hooked into ProjectStore.deleteProject for cleanup. Caught and fixed a real regression via the self-check: __loom_collect_entities__() returned bare `undefined` (not a Promise) when a project declares no entities, silently breaking every plain script run by routing __loom_result__ through __loom_error__.
+
+## M5: View Annotations for Database Tables rows — 2026-08-01
+Approach: NSUserActivity + AppEntityAnnotatable (confirmed against the real iOS 27 SDK — shipping since iOS 18.2, not an iOS-27-specific API). A table maps to an entity type by name ("<project>__<type>" against that project's entities.<type> config); a row is annotated only when it has an `id` column, matching EntityIndexer's own record convention. KV tab rows and Console log lines scoped out — neither has a comparable correlation signal without inventing a new, unmotivated convention.
+
+## M5: Siri preview panel + lint — 2026-08-01
+Approach: SiriPreviewView shares EditorContainerView's existing bottom-panel slot with Console via a segmented control rather than a third toolbar button. SiriLint checks: missing/placeholder description, undescribed intent.inputs fields, over-the-slot-bound field counts (reuses IntentSlotMapping.limit() so the two can't disagree), and entity provider exports missing from source (lightweight text scan, not a full compile — this is lint, not execution).
+
+## M5: reconciled M6 + wrote three ADRs — 2026-08-01
+Approach: Verified, committed, and merged the M6 widget work that was sitting uncommitted in the main checkout before starting M5 (see decisions/006). Wrote ADR-007 (static config extraction mechanism), ADR-008 (generic compile-time App Intents/Entities for runtime schemas — the highest-rework-risk decision in the milestone), and ADR-009 (Share Extension process boundary, decision locked ahead of Group 6's implementation).

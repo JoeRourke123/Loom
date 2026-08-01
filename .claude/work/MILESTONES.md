@@ -72,16 +72,16 @@ Each milestone is a coherent, testable slice of the app. "Done means" is the acc
 ## Milestone 5 — Siri & App Intents
 **Done means:** Every project is invokable from Shortcuts and Siri. Rich typed intents work. URL scheme works. Entity schemas index data into Spotlight.
 
-- [ ] Auto intent registration — RunScriptIntent(projectName:) for every project
-- [ ] Rich intent registration — typed from Zod intent.inputs schema
-- [ ] Zod → App Intent parameter mapping
-- [ ] Intent execution pipeline — params → ctx.input → run → return result
-- [ ] URL scheme handler — `loom://run?script=…&param=…`
-- [ ] Share extension — pick script, run with Loom.share.input()
-- [ ] Entity schema registration — register types + hydrate Spotlight index
-- [ ] View Annotations — annotate output views with entity references
-- [ ] Siri preview panel in editor + lint warnings for vague descriptions
-- [ ] `main.ts` static config extraction (needed for intent registration)
+- [x] Auto intent registration — RunScriptIntent(projectName:) for every project
+- [x] Rich intent registration — typed from Zod intent.inputs schema
+- [x] Zod → App Intent parameter mapping
+- [x] Intent execution pipeline — params → ctx.input → run → return result
+- [x] URL scheme handler — `loom://run?script=…&param=…`
+- [ ] Share extension — pick script, run with Loom.share.input() — design locked (ADR-009), blocked on the Xcode-GUI new-target step
+- [x] Entity schema registration — register types + hydrate Spotlight index
+- [x] View Annotations — annotate output views with entity references (Database Tables rows only; KV rows and Console log lines have no reliable entity-type correlation signal without inventing one — see DONE.md)
+- [x] Siri preview panel in editor + lint warnings for vague descriptions
+- [x] `main.ts` static config extraction (needed for intent registration)
 
 ---
 

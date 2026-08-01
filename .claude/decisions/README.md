@@ -45,3 +45,6 @@ What this creates, closes off, or requires going forward. Include trade-offs hon
 | 004 | [Widget data via JSON in App Group container (no JSC in extension)](004-widget-json-appgroup.md) | partially superseded by ADR-006 |
 | 005 | [Foundation Models v2 LanguageModel protocol for all AI providers](005-foundation-models-v2.md) | accepted |
 | 006 | [M6 widget execution model — pipe, named exports, kv state, project picker](006-widget-execution-model.md) | accepted |
+| 007 | [Static config + Zod extraction via throwaway JSC, not AST or regex](007-static-config-extraction-via-jsc.md) | accepted |
+| 008 | [Generic compile-time App Intents/Entities for runtime-defined project schemas](008-generic-app-intents-for-runtime-schemas.md) | accepted |
+| 009 | [Share Extension process boundary — App Group + loom:// handoff](009-share-extension-process-boundary.md) | accepted (Group 6 implementation pending) |
