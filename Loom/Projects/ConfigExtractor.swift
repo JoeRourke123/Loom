@@ -13,14 +13,14 @@ enum ConfigExtractor {
 
     // Falls back to a name-only config on any failure (missing loom() call, non-literal
     // config, extraction error) so callers never special-case "no config yet".
-    static func extract(for project: LoomProject) -> LoomConfig {
+    nonisolated static func extract(for project: LoomProject) -> LoomConfig {
         guard let source = try? String(contentsOf: project.mainFileURL, encoding: .utf8) else {
             return LoomConfig(name: project.name, description: "")
         }
         return extract(source: source, fallbackName: project.name)
     }
 
-    static func extract(source: String, fallbackName: String) -> LoomConfig {
+    nonisolated static func extract(source: String, fallbackName: String) -> LoomConfig {
         guard let configSource = sliceConfigSource(from: source),
               let json = evaluateAndNormalize(configSource: configSource),
               let data = json.data(using: .utf8),
@@ -37,7 +37,7 @@ enum ConfigExtractor {
     // its 2nd argument — the config object literal. Tracks paren/brace/bracket depth through
     // the 1st argument (the handler) to find the correct top-level comma; the handler's
     // contents are scanned only for depth-balancing, never semantically inspected.
-    static func sliceConfigSource(from source: String) -> String? {
+    nonisolated static func sliceConfigSource(from source: String) -> String? {
         let chars = Array(source)
         guard let callStart = findLoomCallStart(in: chars) else { return nil }
 
@@ -84,7 +84,7 @@ enum ConfigExtractor {
         return nil
     }
 
-    private static func findLoomCallStart(in chars: [Character]) -> Int? {
+    nonisolated private static func findLoomCallStart(in chars: [Character]) -> Int? {
         var i = 0
         while i < chars.count {
             if let skipTo = skipCommentOrString(chars, from: i) {
@@ -104,7 +104,7 @@ enum ConfigExtractor {
 
     // If `chars[i]` starts a line comment, block comment, or string/template literal, returns
     // the index just past it (contents are opaque — never inspected). Otherwise nil.
-    private static func skipCommentOrString(_ chars: [Character], from i: Int) -> Int? {
+    nonisolated private static func skipCommentOrString(_ chars: [Character], from i: Int) -> Int? {
         let c = chars[i]
         if c == "/", i + 1 < chars.count, chars[i + 1] == "/" {
             var j = i
@@ -132,7 +132,7 @@ enum ConfigExtractor {
     // Evaluates the sliced config literal in a fresh, Loom-free JSContext (zod preloaded so
     // `z.object(...)` resolves) and normalizes it to a JSON string matching LoomConfig's shape.
     // No Loom global is injected — even a spec-violating literal has no bridge surface to abuse.
-    private static func evaluateAndNormalize(configSource: String) -> String? {
+    nonisolated private static func evaluateAndNormalize(configSource: String) -> String? {
         guard let vm = JSVirtualMachine(), let ctx = JSContext(virtualMachine: vm),
               let zodJS = VendorPackage.zod.jsContent()
         else { return nil }
