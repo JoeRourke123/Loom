@@ -10,6 +10,7 @@ struct LoomApp: App {
         ConfigExtractor.runSelfCheck()
         IntentSlotMapping.runSelfCheck()
         ModuleBundler.runSelfCheck()
+        SiriLint.runSelfCheck()
         #endif
     }
 

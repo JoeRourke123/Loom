@@ -6,6 +6,7 @@ struct EditorContainerView: View {
     @State private var reloadTrigger = UUID()
     @State private var viewModel = ScriptRunnerViewModel()
     @State private var isConsoleExpanded = false
+    @State private var bottomPanelTab: BottomPanelTab = .console
     @State private var isWidgetPreviewShowing = false
     @State private var widgetPreviewRefreshToken = UUID()
     @State private var projectFiles: [URL] = []
@@ -40,12 +41,29 @@ struct EditorContainerView: View {
                 }
             }
 
-            // Console panel
+            // Bottom panel — Console / Siri preview share one slot, switched via segmented
+            // control, rather than a third independent toolbar button + panel.
             if isConsoleExpanded {
-                Divider()
-                ConsoleView(session: viewModel.currentSession)
-                    .frame(height: consoleHeight)
-                    .transition(.move(edge: .bottom))
+                VStack(spacing: 0) {
+                    Divider()
+                    Picker("Panel", selection: $bottomPanelTab) {
+                        Text("Console").tag(BottomPanelTab.console)
+                        Text("Siri").tag(BottomPanelTab.siri)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
+                    .padding(.bottom, 4)
+
+                    switch bottomPanelTab {
+                    case .console:
+                        ConsoleView(session: viewModel.currentSession)
+                    case .siri:
+                        SiriPreviewView(project: project)
+                    }
+                }
+                .frame(height: consoleHeight)
+                .transition(.move(edge: .bottom))
             }
         }
         .animation(.spring(duration: 0.25), value: isConsoleExpanded)
@@ -219,6 +237,8 @@ struct EditorContainerView: View {
         }
     }
 }
+
+private enum BottomPanelTab { case console, siri }
 
 struct CompileErrorBanner: View {
     let error: CompileError
