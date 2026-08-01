@@ -26,6 +26,7 @@ final class LoomBridge {
     private let camera: CameraBridge
     private let health: HealthBridge
     private let ai: AIBridge
+    private let share: ShareBridge
 
     nonisolated init(ctx: JSContext, project: LoomProject, session: RunSession, runLoop: CFRunLoop) {
         self.ctx = ctx
@@ -49,6 +50,7 @@ final class LoomBridge {
         camera    = CameraBridge(ctx: ctx, project: project)
         health    = HealthBridge(ctx: ctx)
         ai        = AIBridge(ctx: ctx)
+        share     = ShareBridge(ctx: ctx)
     }
 
     // Sets up the Loom global and wires console to LogBridge.
@@ -80,6 +82,7 @@ final class LoomBridge {
         loom.setObject(camera.makeObject(),    forKeyedSubscript: "camera"    as NSString)
         loom.setObject(health.makeObject(),    forKeyedSubscript: "health"    as NSString)
         loom.setObject(ai.makeObject(),        forKeyedSubscript: "ai"        as NSString)
+        loom.setObject(share.makeObject(),     forKeyedSubscript: "share"     as NSString)
         ctx.setObject(loom, forKeyedSubscript: "Loom" as NSString)
 
         log.wireConsole()

@@ -80,11 +80,20 @@ final class ProjectStore {
     }
 
     private func updateAppGroupIndex(projects: [LoomProject]) {
-        let widgetProjects = projects.filter { $0.hasWidget }.map { $0.name }
         guard let defaults = UserDefaults(suiteName: "group.uk.co.joerourke.loom") else { return }
+
+        let widgetProjects = projects.filter { $0.hasWidget }.map { $0.name }
         if let data = try? JSONSerialization.data(withJSONObject: widgetProjects),
            let json = String(data: data, encoding: .utf8) {
             defaults.set(json, forKey: "loom.projects")
+        }
+
+        // Distinct key from "loom.projects" (widget-enabled only) — the Share Extension needs
+        // every project, not just ones with a widget.ts.
+        let allProjects = projects.map { $0.name }
+        if let data = try? JSONSerialization.data(withJSONObject: allProjects),
+           let json = String(data: data, encoding: .utf8) {
+            defaults.set(json, forKey: "loom.allProjects")
         }
     }
 
