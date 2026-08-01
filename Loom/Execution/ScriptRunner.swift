@@ -86,7 +86,7 @@ actor ScriptRunner {
         let bridge = LoomBridge(ctx: ctx, project: project, session: session, runLoop: runLoop)
         bridge.inject()
         injectCtx(ctx: ctx, runId: runId, trigger: trigger, input: input)
-        ctx.evaluateScript("var __loom_result__ = undefined; var __loom_error__ = undefined;")
+        ctx.evaluateScript("var __loom_result__ = undefined; var __loom_error__ = undefined; var __loom_entities_result__ = undefined;")
         ctx.evaluateScript(bundled)
 
         // JSC drains microtasks after each evaluateScript call.
@@ -107,10 +107,18 @@ actor ScriptRunner {
             let entry = LogEntry(runId: runId, projectName: session.projectName, level: .error, message: msg, data: nil)
             session.append(entry)
             session.finish(status: .error, result: nil)
-        } else if let resultVal, !resultVal.isUndefined {
-            session.finish(status: .success, result: resultVal.toString())
         } else {
-            session.finish(status: .success, result: nil)
+            session.finish(status: .success, result: (resultVal?.isUndefined == false) ? resultVal?.toString() : nil)
+
+            // __loom_result__ is only ever set once entity collection has settled (see
+            // ModuleBundler.executionFooter), so it's safe to read __loom_entities_result__
+            // right here — no separate wait needed.
+            if let entitiesVal = ctx.evaluateScript("__loom_entities_result__"),
+               !entitiesVal.isUndefined, !entitiesVal.isNull,
+               let entitiesJSON = entitiesVal.toString() {
+                let config = ConfigExtractor.extract(for: project)
+                EntityIndexer.index(project: project, entitiesJSON: entitiesJSON, config: config)
+            }
         }
 
         Task { await RunHistoryStore.shared.save(session) }

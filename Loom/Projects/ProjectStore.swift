@@ -44,6 +44,7 @@ final class ProjectStore {
     func deleteProject(_ project: LoomProject) throws {
         var resultURL: NSURL?
         try FileManager.default.trashItem(at: project.folderURL, resultingItemURL: &resultURL)
+        EntityIndexer.deleteAll(forProject: project.name)
         loadProjects()
     }
 

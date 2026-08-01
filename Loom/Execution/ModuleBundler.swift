@@ -1,12 +1,16 @@
 import Foundation
+import JavaScriptCore
 
 enum ModuleBundler {
 
     // MARK: - Public API
 
     // Bundles a main.ts SWC-compiled ESM string into a self-contained JSC payload.
+    // collectExports: true so an entity `provider` named export (e.g. `export function
+    // recipeProvider() {...}`) actually lands on module.exports — the entity-collection pass
+    // in executionFooter looks it up there after the main handler succeeds.
     static func bundle(compiledJS: String) -> String {
-        let cjsScript = esmToCJS(compiledJS, collectExports: false).script
+        let cjsScript = esmToCJS(compiledJS, collectExports: true).script
         let requiredVendors = detectVendors(in: cjsScript)
         var parts: [String] = []
 
@@ -269,13 +273,46 @@ enum ModuleBundler {
       }
       Promise.resolve(__fn__(ctx))
         .then(function(r) {
-          try { __loom_result__ = JSON.stringify(r !== undefined ? r : null); }
-          catch(e) { __loom_result__ = 'null'; }
+          var resultJSON;
+          try { resultJSON = JSON.stringify(r !== undefined ? r : null); }
+          catch(e) { resultJSON = 'null'; }
+          // __loom_result__ is set only once entity collection below has fully settled — the
+          // drain loop in ScriptRunner.execute() exits as soon as __loom_result__ is defined,
+          // so this ordering (rather than a separate completion flag) is what guarantees
+          // __loom_entities_result__ is already populated by the time Swift reads it.
+          return __loom_collect_entities__().then(function() {
+            __loom_result__ = resultJSON;
+          });
         })
         .catch(function(e) {
           __loom_error__ = e && e.message ? e.message : String(e);
         });
     })();
+
+    // Runs only after the main handler resolves (never on error). For each entities.<type>
+    // declared in the static config, calls its named `provider` export (no args) and collects
+    // the results — providers commonly read from Loom.db/Loom.kv, so this chains Promises
+    // rather than assuming a sync return. One provider throwing doesn't block the others.
+    function __loom_collect_entities__() {
+      var entities = __loom_config__ && __loom_config__.entities;
+      if (!entities || typeof entities !== 'object') return Promise.resolve();
+
+      var out = {};
+      var chain = Promise.resolve();
+      Object.keys(entities).forEach(function(typeName) {
+        chain = chain.then(function() {
+          var spec = entities[typeName];
+          var fn = spec && spec.provider && module.exports ? module.exports[spec.provider] : null;
+          if (typeof fn !== 'function') return;
+          return Promise.resolve(fn())
+            .then(function(records) { out[typeName] = records; })
+            .catch(function() { /* one provider failing shouldn't block others */ });
+        });
+      });
+      return chain.then(function() {
+        try { __loom_entities_result__ = JSON.stringify(out); } catch (e) { /* leave unset */ }
+      });
+    }
     """
 
     // Calls each named size export (small/medium/large/extraLarge) as a factory function
@@ -307,4 +344,93 @@ enum ModuleBundler {
       }
     })();
     """
+
+    // MARK: - Self-check
+
+    // Regression guard on the core execution footer, used by every script run — exercises the
+    // real bundle() + JS footer end-to-end (not a mock), both with and without an entities
+    // config, so a change here can't silently break the plain-script path everything else
+    // depends on. No test target exists in this project; callable directly instead of XCTest.
+    #if DEBUG
+    @discardableResult
+    static func runSelfCheck() -> Bool {
+        var failures: [String] = []
+        func check(_ name: String, _ condition: @autoclosure () -> Bool) {
+            if !condition() { failures.append(name) }
+        }
+
+        func runBundled(_ compiledJS: String) -> (result: String?, error: String?, entities: String?) {
+            let bundled = bundle(compiledJS: compiledJS)
+            guard let vm = JSVirtualMachine(), let ctx = JSContext(virtualMachine: vm) else {
+                return (nil, "failed to create JSContext", nil)
+            }
+            var exception: String? = nil
+            ctx.exceptionHandler = { _, ex in exception = ex?.toString() }
+
+            ctx.evaluateScript("var ctx = { input: {}, trigger: 'manual', runId: 'selfcheck' };")
+            ctx.evaluateScript("var __loom_result__ = undefined; var __loom_error__ = undefined; var __loom_entities_result__ = undefined;")
+            ctx.evaluateScript(bundled)
+
+            for _ in 0..<20 {
+                ctx.evaluateScript(";")
+                let done = ctx.evaluateScript("typeof __loom_result__ !== 'undefined' || typeof __loom_error__ !== 'undefined'")?.toBool() == true
+                if done { break }
+            }
+
+            let result = ctx.evaluateScript("__loom_result__")
+            let error = ctx.evaluateScript("__loom_error__")
+            let entities = ctx.evaluateScript("__loom_entities_result__")
+            return (
+                result?.isUndefined == false ? result?.toString() : nil,
+                error?.isUndefined == false ? error?.toString() : exception,
+                entities?.isUndefined == false ? entities?.toString() : nil
+            )
+        }
+
+        // No entities declared — must behave exactly as before entity collection was added.
+        let plain = runBundled("""
+        import { loom } from '@loom/core';
+        export default loom(async (ctx) => {
+          return { greeting: 'hi' };
+        }, {
+          name: 'Test',
+          description: 'x',
+        });
+        """)
+        check("plain.result", plain.result == "{\"greeting\":\"hi\"}")
+        check("plain.noError", plain.error == nil)
+        check("plain.noEntities", plain.entities == nil)
+
+        // Entities declared — provider export runs and results are collected. Providers must
+        // be `export const name = ...` (arrow/function expression), matching widget.ts's size
+        // exports — esmToCJS's named-export handling only recognizes const/let/var
+        // declarations, not `export function name() {}`.
+        let withEntities = runBundled("""
+        import { loom } from '@loom/core';
+        export const noteProvider = function() {
+          return [{ id: 'n1', title: 'Note One' }, { id: 'n2', title: 'Note Two' }];
+        };
+        export default loom(async (ctx) => {
+          return { ok: true };
+        }, {
+          name: 'Test',
+          description: 'x',
+          entities: {
+            note: { displayName: 'Note', fields: { title: { type: 'string' } }, provider: 'noteProvider' }
+          },
+        });
+        """)
+        check("entities.result", withEntities.result == "{\"ok\":true}")
+        check("entities.noError", withEntities.error == nil)
+        check("entities.hasRecord1", withEntities.entities?.contains("Note One") == true)
+        check("entities.hasRecord2", withEntities.entities?.contains("n2") == true)
+
+        if failures.isEmpty {
+            print("[ModuleBundler] self-check passed")
+        } else {
+            print("[ModuleBundler] self-check FAILED: \(failures.joined(separator: ", "))")
+        }
+        return failures.isEmpty
+    }
+    #endif
 }
