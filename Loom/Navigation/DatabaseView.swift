@@ -1,4 +1,5 @@
 import SwiftUI
+import AppIntents
 
 struct DatabaseView: View {
     @Environment(ProjectStore.self) private var projectStore
@@ -105,12 +106,27 @@ private struct TableDetailView: View {
         rows.first.map { $0.keys.sorted() } ?? []
     }
 
+    // Table name is "<projectFolderName>__<name>" for private tables, "shared__<name>" for
+    // shared ones. Entity annotation only applies when the un-prefixed name matches an
+    // entities.<type> key in that project's static config — a shared table has no single
+    // owning project's config to check against, so it's left unannotated.
+    private var entityContext: RowView.EntityContext? {
+        guard let range = table.range(of: "__") else { return nil }
+        let projectName = String(table[..<range.lowerBound])
+        let typeName = String(table[range.upperBound...])
+        guard projectName != "shared",
+              let project = LoomProjectResolver.project(named: projectName),
+              let spec = ConfigExtractor.extract(for: project).entities?[typeName]
+        else { return nil }
+        return RowView.EntityContext(project: project, typeName: typeName, spec: spec)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             List {
                 Section {
                     ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                        RowView(row: row, columns: columns)
+                        RowView(row: row, columns: columns, entityContext: entityContext)
                     }
                 } header: {
                     HStack {
@@ -137,7 +153,7 @@ private struct TableDetailView: View {
                                 .foregroundStyle(.red)
                         }
                         ForEach(Array(sqlResult.enumerated()), id: \.offset) { _, row in
-                            RowView(row: row, columns: row.keys.sorted())
+                            RowView(row: row, columns: row.keys.sorted(), entityContext: nil)
                         }
                     }
                 }
@@ -156,9 +172,40 @@ private struct TableDetailView: View {
 }
 
 private struct RowView: View {
+    struct EntityContext {
+        let project: LoomProject
+        let typeName: String
+        let spec: LoomConfig.EntityType
+    }
+
     let row: [String: Any]
     let columns: [String]
+    let entityContext: EntityContext?
     @State private var expanded = false
+
+    // Rows are associated with a LoomDataEntity only when the table maps to a configured
+    // entity type AND the row has an `id` column — matching EntityIndexer's own `{id,
+    // ...fields}` provider-record convention, so a row's annotated identity is the same one
+    // Spotlight already indexes it under.
+    private var entity: LoomDataEntity? {
+        guard let entityContext, let id = stringValue(row["id"]) else { return nil }
+        let title = stringValue(row["title"]) ?? stringValue(row["name"]) ?? id
+        return LoomDataEntity(
+            id: "\(entityContext.project.name):\(entityContext.typeName):\(id)",
+            title: title,
+            subtitle: entityContext.spec.displayName
+        )
+    }
+
+    private func stringValue(_ any: Any?) -> String? {
+        switch any {
+        case let s as String: return s
+        case let i as Int: return String(i)
+        case let i as Int64: return String(i)
+        case let d as Double: return String(d)
+        default: return nil
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -182,6 +229,28 @@ private struct RowView: View {
             }
         }
         .padding(.vertical, 2)
+        .modifier(EntityAnnotation(entity: entity))
+    }
+}
+
+// NSUserActivity + AppEntityAnnotatable is the real, stable mechanism for associating
+// on-screen content with an AppEntity (available since iOS 18.2 — confirmed directly against
+// the iOS 27 SDK's AppIntents.swiftinterface), not a fallback for a missing iOS-27-specific
+// API. NSUserActivityTypes in Info.plist declares the one activity type used here.
+private struct EntityAnnotation: ViewModifier {
+    let entity: LoomDataEntity?
+
+    func body(content: Content) -> some View {
+        if let entity {
+            content.userActivity("uk.co.joerourke.Loom.viewRecord") { activity in
+                activity.title = entity.title
+                activity.appEntityIdentifier = EntityIdentifier(for: entity)
+                activity.isEligibleForSearch = true
+                activity.isEligibleForPrediction = true
+            }
+        } else {
+            content
+        }
     }
 }
 

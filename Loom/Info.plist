@@ -31,5 +31,9 @@
 			<string>Editor</string>
 		</dict>
 	</array>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>uk.co.joerourke.Loom.viewRecord</string>
+	</array>
 </dict>
 </plist>
