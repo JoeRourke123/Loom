@@ -1,10 +1,10 @@
 import Foundation
 import Security
 
+// Service names are supplied by the caller. The only live producer is AIProvider.keychainService
+// (one service per provider UUID); the two fixed Loom.ai services this used to declare were
+// retired by ADR-015 and are read exactly once more, by AIProviderStore's migration.
 enum KeychainManager {
-    static let claudeAPIKeyService = "uk.co.joerourke.Loom.claude-api-key"
-    static let geminiAPIKeyService = "uk.co.joerourke.Loom.gemini-api-key"
-
     static func save(_ value: String, service: String) {
         let data = Data(value.utf8)
         let query: [CFString: Any] = [

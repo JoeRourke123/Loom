@@ -21,14 +21,14 @@ final class DatabaseBridge {
             guard let self else { return JSValue(undefinedIn: nameVal.context) }
             let name = nameVal.toString() ?? ""
             let fullName = "\(self.project.name)__\(name)"
-            return self.makeTableProxy(table: fullName, shared: false)
+            return self.makeTableProxy(table: fullName)
         }
 
         let sharedObj = JSValue(newObjectIn: ctx)!
         let sharedTableBlock: @convention(block) (JSValue) -> JSValue = { [weak self] nameVal in
             guard let self else { return JSValue(undefinedIn: nameVal.context) }
             let name = nameVal.toString() ?? ""
-            return self.makeTableProxy(table: "shared__\(name)", shared: true)
+            return self.makeTableProxy(table: "shared__\(name)")
         }
         sharedObj.setObject(sharedTableBlock, forKeyedSubscript: "table" as NSString)
 
@@ -37,7 +37,9 @@ final class DatabaseBridge {
         return obj
     }
 
-    nonisolated private func makeTableProxy(table: String, shared: Bool) -> JSValue {
+    // `table` arrives already namespaced — the prefix *is* the private/shared boundary, so nothing
+    // downstream needs to know which it was.
+    nonisolated private func makeTableProxy(table: String) -> JSValue {
         let proxy = JSValue(newObjectIn: ctx)!
 
         let insertBlock: @convention(block) (JSValue) -> JSValue = { [weak self] rowVal in
@@ -45,7 +47,7 @@ final class DatabaseBridge {
             let row = rowVal.toDictionary() as? [String: Any] ?? [:]
             return self.makePromise { resolve, reject in
                 Task.detached {
-                    do { try await ScriptDB.shared.insert(into: table, row: row, shared: shared); resolve(nil) }
+                    do { try await ScriptDB.shared.insert(into: table, row: row); resolve(nil) }
                     catch { reject(error.localizedDescription) }
                 }
             }
@@ -56,7 +58,7 @@ final class DatabaseBridge {
             let conditions = whereVal.isObject ? whereVal.toDictionary() as? [String: Any] : nil
             return self.makePromise { resolve, reject in
                 Task.detached {
-                    do { let rows = try await ScriptDB.shared.select(from: table, where: conditions, shared: shared); resolve(rows as NSArray) }
+                    do { let rows = try await ScriptDB.shared.select(from: table, where: conditions); resolve(rows as NSArray) }
                     catch { reject(error.localizedDescription) }
                 }
             }
@@ -68,7 +70,7 @@ final class DatabaseBridge {
             let values = valuesVal.toDictionary() as? [String: Any] ?? [:]
             return self.makePromise { resolve, reject in
                 Task.detached {
-                    do { let n = try await ScriptDB.shared.update(in: table, where: conditions, set: values, shared: shared); resolve(n) }
+                    do { let n = try await ScriptDB.shared.update(in: table, where: conditions, set: values); resolve(n) }
                     catch { reject(error.localizedDescription) }
                 }
             }
@@ -79,7 +81,7 @@ final class DatabaseBridge {
             let conditions = whereVal.toDictionary() as? [String: Any] ?? [:]
             return self.makePromise { resolve, reject in
                 Task.detached {
-                    do { let n = try await ScriptDB.shared.delete(from: table, where: conditions, shared: shared); resolve(n) }
+                    do { let n = try await ScriptDB.shared.delete(from: table, where: conditions); resolve(n) }
                     catch { reject(error.localizedDescription) }
                 }
             }

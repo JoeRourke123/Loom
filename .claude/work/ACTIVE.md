@@ -26,10 +26,426 @@ Concrete description. No vague language. If it touches UI, describe the exact vi
 
 ---
 
-_M6 and M4 shipped — specs archived below for reference._
+_Unified AI credentials + htmx web sheets + M7 pre-flight below. Examples overhaul, database query overhaul, M8, M6, M5, and M4 shipped — see DONE.md._
 
 ---
 
+<!-- Live Activities pre-flight archived — shipped 2026-08-10, see DONE.md and ADR-022. Kept only
+     because the SDK research at the top (read from ActivityKit.swiftinterface, not the web) is
+     worth not re-deriving: Activity.activities as the registry, the 4 KB cap, the foreground
+     restriction on start, and isDynamicIslandLimitedInWidth being iOS 27.0-only.
+
+## `Loom.activity` — Live Activities — pre-flight
+
+Milestone: n/a — ad-hoc, user request: "the ability to create, customise, update, and end rich live
+activities within their Loom scripts"
+
+**What exactly is being built**
+
+A 19th bridge namespace. A script starts a Live Activity, updates it from *later, separate* runs,
+and ends it — with the layout authored using the same `w.*` builders widgets already use.
+
+```ts
+await Loom.activity.start({
+  key: 'deploy',                                  // script-chosen; how later runs find it
+  content: w.vstack([w.text('Deploying…'), w.progressBar({ value: 0.1 })]),
+  compactLeading: w.icon('shippingbox.fill'),
+  compactTrailing: w.text('10%'),
+  minimal: w.icon('shippingbox.fill'),
+  expanded: { leading: …, trailing: …, center: …, bottom: … },
+  staleAfter: 900, relevance: 50, style: 'standard' | 'transient',
+});
+await Loom.activity.update('deploy', { content: …, alert: { title: 'Halfway', body: '…' } });
+await Loom.activity.end('deploy', { content: …, dismiss: 'immediate' });
+await Loom.activity.list();                       // [{ key, state }]
+```
+
+**Research — the iOS 27.0 SDK, read directly** (`ActivityKit.swiftinterface`, not the web, which is
+stale and partly wrong about iOS 26+ signatures)
+
+- `Activity<A>.request(attributes:content:pushType:style:alertConfiguration:start:)`;
+  `update(_:alertConfiguration:timestamp:)`; `end(_:dismissalPolicy:timestamp:)`.
+- `ActivityStyle.standard | .transient`; `ActivityUIDismissalPolicy.default | .immediate | .after(Date)`;
+  `ActivityContent(state:staleDate:relevanceScore:)`; `AlertConfiguration(title:body:sound:)`.
+- **`Activity<A>.activities` is a live static registry.** Filtering it by `attributes.key` gives
+  cross-run update/end for free — no App Group entry, no store, nothing to persist or reconcile.
+  This is the single fact that keeps the feature small.
+- `@Environment(\.isDynamicIslandLimitedInWidth)` is **iOS 27.0+** — the new landscape Dynamic Island.
+- `LiveActivityIntent: SystemIntent: AppIntent`, so it is a strict refinement: the existing
+  `WidgetButtonIntent`/`WidgetToggleIntent` keep working in widgets after conforming.
+
+**Constraints that shaped it**
+
+1. **4 KB cap** on attributes + ContentState combined (`ActivityAuthorizationError.attributesTooLarge`).
+   Layout travels *inside* ContentState, so this is the binding constraint, not a footnote.
+2. **Foreground required to start** (`.visibility`). Updates and ends work from the background.
+3. 8 h active, +4 h Lock Screen, then the system ends it regardless.
+4. `NSSupportsLiveActivities` was not set on the app target. Nothing would have worked without it.
+
+**Implementation approach**
+
+- **`Loom/Widget/LoomActivityAttributes.swift`** (new, shared source) — one `LoomActivityAttributes`
+  (`key`, `projectName`) whose `ContentState` is a single `layout: String`. A string, not a nested
+  Codable tree, because `WidgetNode` is `[String: Any]`-backed and deliberately not `Codable`
+  (`WidgetNode.swift:4-6`). `LoomActivityLayout.from(json:)` decodes it, mirroring `WidgetResult`.
+- **`LoomWidgetExtension/LoomWidgetExtensionLiveActivity.swift`** (currently a one-line "not part of
+  v1" stub) — the `ActivityConfiguration`. Renders every region through the **existing** `WidgetView`,
+  so all 22 node types, charts, rings and gauges work in a Live Activity on day one. New rendering
+  code: zero.
+- **`Loom/Bridge/ActivityBridge.swift`** (new) — `start`/`update`/`end`/`list`, following
+  `NotifyBridge`'s shape and `AIBridge`'s `Task.detached` + `makePromise` async pattern.
+- **Wiring** — `LoomBridge` (2 lines), `INFOPLIST_KEY_NSSupportsLiveActivities` on both app configs,
+  and one line in the pbxproj `membershipExceptions` list that already shares `WidgetNode.swift` and
+  `WidgetView.swift` into the extension. Synchronized root groups pick up everything else.
+- **No new JS module.** `@loom/widget` is already in every bundle unconditionally
+  (`ModuleBundler.swift:38`), so `w.*` is already in scope for activity layouts.
+
+**Two failure modes, deliberately different**
+
+Script error → **reject**. Environment refusal → **warn and continue**. So an oversized payload
+throws (naming the actual byte count, since the fix is "simplify the tree"), while a background run
+that can't start an activity logs a warning and resolves `null`, exactly as `Loom.ui` degrades. A
+silent `attributesTooLarge` would be indistinguishable from "iOS didn't feel like it".
+
+**Open questions (resolved with the user before coding):**
+- [x] Payload strategy — full tree in ContentState with a size guard, over a fixed native layout or
+      an App Group pointer. Chosen for full script control; the guard makes the 4 KB cap loud.
+- [x] Background `start()` — warn and continue, no `ForegroundGate` wait, no special-casing.
+      User's call, explicitly: "make no special accommodation for bg runs".
+- [x] Scope — interactive buttons, `transient` style, and landscape Dynamic Island in.
+      **Apple Watch / CarPlay (`.supplementalActivityFamilies([.small])`) deliberately out**, though
+      it is one line — not requested, so not built.
+- [x] Push updates (`pushType: .token`) — out. Needs a server; Loom is device-only by design.
+
+**Dependencies:** None. Reuses M6's widget renderer wholesale.
+-->
+
+---
+
+<!-- Shortcuts pre-flight archived — both parts shipped 2026-08-10, see DONE.md and ADR-021.
+     Kept only as a pointer: the diagnosis notes (why stdout is useless for intents, why
+     loom_runs.db's duration column was the answer) live in the DONE.md entry. -->
+
+<!-- Widget-tap pre-flight archived — shipped 2026-08-10, see DONE.md. -->
+
+## Unified AI credentials — `Loom.ai` on the provider store — pre-flight
+
+> **Status: code complete, unverified.** All edits are in the working tree and ADR-015, the
+> DONE.md entry, and the doc rewrites are written — but **the project has not been built or run
+> since**. No iOS 27 simulator runtime is installed (only 26.3.1) and the deployment target is
+> iOS 27, so the build was left to Xcode. Run the checklist at the end before ticking this off.
+
+Milestone: n/a — ad-hoc, closes the unification ADR-011 deferred
+Backlog item: n/a — user asked whether Claude Pro/Max OAuth was possible for the assistant providers, and to consolidate the `Loom.ai` model API keys into the same architecture
+
+**What exactly is being built:**
+
+`AIProviderStore` becomes the single credential store, and `AIClient` the single wire
+implementation, for all three AI consumers: the authoring assistant, inline editor completions,
+and the `Loom.ai` script bridge. `Loom.ai` stops owning credentials and HTTP entirely.
+
+Scripts select a provider by the **name the user gave it in Settings**:
+
+```ts
+await Loom.ai.complete(prompt);                              // on-device (default)
+await Loom.ai.complete(prompt, { provider: 'apple' });       // on-device, explicit
+await Loom.ai.complete(prompt, { provider: 'Claude' });      // a provider from Settings
+await Loom.ai.complete(prompt, { provider: 'Nope' });        // throws — no such provider
+```
+
+**Implementation approach:**
+
+- **`AIBridge`** — `claudeComplete`/`claudeChat`/`geminiComplete`/`geminiChat`, the `Provider`
+  enum, `resolvedProvider`, and `AIError.missingAPIKey`/`.badResponse` all deleted (~60 lines).
+  New `resolveProvider(opts) -> AIProvider?` (nil = on-device, throws on an unknown name) and
+  `remote(provider:messages:opts:)` which drains `AIClient.stream` into one `String`. `complete`
+  still passes the raw prompt to Apple rather than the role-prefixed form `chat` builds.
+  `opts.model`/`opts.maxTokens` override the provider's stored values per call via a local `var`
+  copy — the `id` is unchanged so the Keychain lookup still resolves.
+- **No change to `makePromise`.** ADR-011 cited its semaphore as structurally incompatible with
+  streaming, which is true but irrelevant: `Loom.ai` needs the request encoding, not the
+  streaming. Collecting the stream sidesteps the incompatibility rather than solving it.
+- **`AIProviderStore.migrateLegacyScriptKeys()`** — one-shot behind `loom.assistant.migratedLegacyKeys`,
+  called at the end of `init`. Creates "Claude" (anthropic wire) and "Gemini" (openai wire, the
+  OpenAI-compatible endpoint) from whichever legacy Keychain items hold a non-empty value, skips
+  a name the user already used, and `defer`s the delete of the old item so it happens on every
+  path.
+- **Gemini via `…/v1beta/openai`** — a plain `.openai`-wire provider, so `AIClient` gains no third
+  dialect. `AIClient` and `AIProviderListView` are untouched.
+- **Isolation check:** the app target sets `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, and
+  `AIBridge` marks only `init`/`makeObject`/`makePromise` as `nonisolated` — so `complete`/`chat`
+  are `@MainActor`, the same as `AIProviderStore`, and can read it directly with no hop. The
+  script thread is a dedicated thread, so `makePromise`'s semaphore can't deadlock against it.
+
+**Open questions:** None — resolved with the user before coding.
+- Pro/Max OAuth: not buildable (prohibited, enforced since 2026-01-09). Dropped from scope at the
+  user's direction; reasoning recorded in ADR-015 so it isn't re-litigated.
+- Provider naming: user chose name-based lookup with `apple` as the on-device default.
+
+**Verification checklist (none of this has been run):**
+1. **Build in Xcode.** Nothing below matters until it compiles.
+2. **Migration, on a device.** Set both legacy keys in the *current* build, install the new one,
+   confirm two providers appear with working keys and the old Keychain items are gone. Relaunch
+   and confirm it doesn't re-run or duplicate.
+3. **Codable safety.** With providers already configured, confirm the list survives the upgrade
+   (no non-Optional field was added, but this is the guard that matters most).
+4. **Script path.** A scratch project calling `complete` with `'Claude'`, `'Gemini'`, `'apple'`,
+   and `'Nope'` (expect a clear throw on the last).
+5. **Gemini OpenAI-compat** against the live endpoint — the one substitution with no local cover.
+6. **Assistant + completions unaffected** — send an assistant turn (streaming + tools), toggle
+   Code Suggestions and confirm completions still fire.
+7. **Settings** — no "API Keys" section; one provider list drives all three consumers.
+
+**Dependencies:** None. Supersedes ADR-011's deliberate `Loom.ai`/assistant split.
+
+---
+
+## htmx web sheets — `Loom.ui.web()` — pre-flight
+
+> **Status: code complete, on-device verification pending.** Everything below is implemented and
+> the project builds clean; ADR-014 and the DONE.md entry are written. The serve loop was verified
+> pre-flight by extracting the exact `serveJS`/`loomCoreStub` literals and running 22 assertions
+> under node, but the app itself has **not been run** — no iOS 27 simulator runtime is installed
+> (only 26.3.1), and the deployment target is iOS 27. Run the manual checklist at the end of
+> `~/.claude/plans/help-me-plan-an-sprightly-flurry.md` before ticking this off.
+
+Milestone: M7 — Background Tasks & Release Polish (ad-hoc request, lands alongside)
+Backlog item: n/a — user asked for "an htmx style web sheet view", a full page template populated by `main.ts`, `.html` files allowed and AI-generatable with editor-suggestion integration
+
+**What exactly is being built:**
+
+A script serves a full HTML page into a `WKWebView` modal sheet. htmx attributes in that page call back into functions defined in `main.ts`, which return HTML fragments exactly as a server-side endpoint would. This is the first interactive UI surface Loom has — `Loom.ui` currently offers only `alert`, `input`, and a read-only `table` (`Loom/Bridge/UIBridge.swift`, 3 methods).
+
+```ts
+import { loom, html } from '@loom/core';
+
+async function listTodos() {
+  const todos = await Loom.db.query('todos');
+  return html`<ul>${todos.map(t => html`<li>${t.title}</li>`)}</ul>`;
+}
+
+export default loom(async (ctx) => {
+  await Loom.ui.web({
+    template: 'index.html',
+    routes: { 'GET /todos': listTodos, 'POST /todos': addTodo },
+  });
+}, { name: 'Todos' });
+```
+
+`index.html` is served verbatim as the shell; content arrives via `hx-trigger="load"`. No template engine. The run stays alive serving requests until the user dismisses the sheet.
+
+**Implementation approach:**
+
+- **The loop must run in JS.** `ScriptRunner.execute()` creates a function-local `JSContext` (`ScriptRunner.swift:75`) and the entire run completes inside `ctx.evaluateScript(bundled)` (line 91) — there is no API to call exports after that returns. Worse, JSC drains microtasks only when the outermost JS entry unwinds, so a nested `JSValue.call()` from a native block never drains: **Swift cannot `await` an async JS function**. `LoomBridge.swift:59-61` already records this constraint. So `Loom.ui.web` is a **JS closure** over four native blocks (`open`/`next`/`respond`/`close`), built by evaluating a factory in `UIBridge.makeObject()` — no new globals. It runs `while (true) { const req = await next(); ... respond(...) }` inside the handler's own async chain, on the script thread. A plain `while` is stack-flat; each `await` is a fresh microtask, not a nested frame.
+- **Not in `executionFooter`** — that runs *after* the handler resolves, and a web sheet must serve *during* it. So `ModuleBundler` needs no loop change at all, and `__loom_result__` ordering is untouched.
+- **New `Loom/Bridge/LoomWebSheet.swift`** — `NSCondition` request queue, `WKURLSchemeHandler` on scheme `loomweb` (deliberately not `loom`, the deep-link scheme), sheet controller, request parsing, `runSelfCheck()`. Loads via `webView.load(URLRequest(url: "loomweb://app/"))`, not `loadHTMLString(_:baseURL:)` — the latter doesn't reliably route subresources through the handler, and serving `/` from the handler is what makes relative `hx-get="/todos"` resolve correctly.
+- **Routes are function references in the `Loom.ui.web()` argument**, never the `loom()` config: `ConfigExtractor` slices the config as raw text and evaluates it in an isolated context (ADR-007), so a function reference there silently vanishes. Lookup is `routes[method + ' ' + path] || routes[path]`. Exact match only; no path params in v1.
+- **`html` tagged template in `loomCoreStub`** (`ModuleBundler.swift:182-190`) with `__loom_esc__` added to `LoomBridge.inject()`'s preamble (`LoomBridge.swift:62-65`) so one definition serves both the tag and the serve loop's error path. Escapes `& < > " '`; nested fragments and arrays compose without double-escaping. **The escaping-by-default is the feature's security control** — the real risk is untrusted fetched data (an RSS title, an API response) interpolated into HTML and executing in the `loomweb://app` origin.
+- **`LoomProject.editableExtensions`** replaces four independent extension literals: `NewFileSheet.swift:11-19` (creation), `EditorContainerView.swift:214` (visibility — a non-`.ts` file is currently invisible in the switcher even if it exists), `AssistantTools.swift:85` (trust boundary). Plus `EditorView.swift:33` gains a per-file `languageMode(for:)` called on file switch as well as in `makeUIView` — today it is set once and never revisited.
+- **Suggestions** gain one `language` dimension on `SuggestionEngine` and three branches (token characters, pill source, AI prompt). `htmxAttributes` goes in `LoomAPICatalog` as a **separate const, not in `signatures`** — those are markup attributes, not `Loom.*` methods, and `signatures` feeds `promptManifest` for every TypeScript file.
+
+**Three latent bugs this change would otherwise trip, found during research:**
+- `EditorView.swift:90` SWC-compiles the buffer on every keystroke → an error banner on every HTML file. Must guard on `.ts`.
+- `SuggestionEngine.swift:43-45` `tokenCharacters` has no `-`, so `hx-get` tokenises as `get` and htmx pills would never match.
+- Responding to a `WKURLSchemeTask` after WebKit has passed it to `webView(_:stop:)` is an ObjC exception → hard crash. Needs a live-task map keyed on the main thread.
+- `AssistantTools.checkScript` (140-164) unconditionally runs `SWCCompiler.compile` and would fail on any `.html`.
+
+**Open questions (must resolve before coding):**
+- [x] JSX / `.tsx` — resolved: **dropped**. Verified empirically that the vendored `@swc/wasm-typescript` 1.15.41 parses JSX only with `parser:{tsx:true}` and then emits it **verbatim** in both `strip-only` and `transform` modes; `swc_ecma_transforms_react` is not linked into the 3.8 MB binary. JSX would reach JSC as a SyntaxError. Real JSX needs `@swc/wasm` at 19.3 MB (**+15.6 MB app size**). The `html` tagged template gives the same output for ~15 lines. Separately, `requireShim` has no module resolution, so a non-entry `.tsx` could never be imported anyway — `main.ts` stays the sole entry point.
+- [x] Where routes live — resolved: explicit map of function references in the `Loom.ui.web()` argument. Cannot be the `loom()` config (ADR-007, silent failure).
+- [x] How the template is "populated" — resolved: served verbatim, content pulled by `hx-trigger="load"`. No template engine, no initial-data injection.
+- [x] Preview panel tab — resolved: **not built**. The widget precedent works because a widget tree is an inert snapshot; a web sheet is only meaningful while a run is alive to serve it. A 5th `BottomPanelTab` would be dead or would have to start a run, which the Run button already does.
+- [x] Indefinite parking while the sheet is open — resolved: not a new problem. `Loom.ui.input()` already parks a run until the user taps OK, and ADR-002 is explicit that there is a memory guard but no timeout. No timeout invented here.
+
+**Dependencies:**
+- `htmx.min.js` vendored into `Loom/Resources/Web/` via a new `Scripts/fetch-htmx.sh`, mirroring the existing `Scripts/fetch-swc.sh` convention (output committed to repo).
+- SPM product `TreeSitterHTMLRunestone` from the already-pinned `simonbs/TreeSitterLanguages` 0.1.10 — added via Xcode's UI, not a pbxproj hand-edit.
+- ADR-014 must reconcile with ADR-002 (rejected WKWebView as the *JS runtime* — this is a view with no bridge to JSC) and ADR-010 (rejected a WebView for docs diagrams, but named its own re-open condition; here the surface is open-ended and user-authored).
+
+---
+
+## Widget rearchitecture — schema in main.ts — pre-flight
+
+Milestone: M3 — Widget System (post-ship rework, ad-hoc request)
+Backlog item: n/a — user asked to move widget schema generation into `main.ts` and drop the separate `widget.ts` system, then to fold the preview into the editor's bottom panel
+
+**What exactly is being built:**
+
+`widget.ts` and its entire runner are deleted. A widget is now a `widget` named export in `main.ts`, invoked by the ordinary `executionFooter` after the main handler resolves — the same mechanism `entities.provider` already uses:
+
+```ts
+export const widget = async (ctx) => w.vstack([w.text(ctx.data.temp)]);
+
+export default loom(async (ctx) => ({ temp: 21 }), {
+  name: 'Weather',
+  widget: { refreshAfter: 900 },
+});
+```
+
+Called **once**. Returning a `w.*` node uses it for all four families; returning `{ small, medium, large, extraLarge }` gives per-family trees. Discriminated on `.type`, which every node has and a size map never does. `ctx` for the call is `{ input, data, trigger: 'widgetRender', runId }` — `ctx.data` is the handler's return value, where the old system confusingly passed it as `ctx.input`.
+
+Because it runs in the main script context it gets the full `Loom.*` bridge and may be async. A throwing `widget` logs `.warn` and never fails the run.
+
+The in-app preview stops being a separate toolbar button + `.sheet` and becomes a fourth tab in the existing Console/Siri/Assistant panel, with the tab picker switching from text to icons. The preview itself is rewritten to scale-to-fit instead of pinning true WidgetKit points inside a two-axis `ScrollView`.
+
+**Implementation approach:**
+
+- **`ModuleBundler`** — `@loom/widget` is now in every bundle (drop `requireShim(includeWidget:)`). New `__loom_collect_widget__(data)` chains between `__loom_collect_entities__()` and the `__loom_result__` assignment; that ordering is load-bearing, since `ScriptRunner`'s drain loop exits the moment `__loom_result__` is defined. `widgetBundle` + `widgetExecutionFooter` deleted. `esmToCJS` gains `export function NAME` — authors will write `export function widget(ctx)`, which was silently dropped (the same footgun entity providers have).
+- **`ScriptRunner.execute`** — reads `__loom_widget_result__` / `__loom_widget_error__`, appends the warn entry *before* `session.finish` (entity indexing runs post-finish and appends nothing, so its placement isn't a template), then `WidgetResult.write` + `reloadAllTimelines()`. Every trigger — editor, Siri, `loom://run`, Share Extension, future BG tasks — now refreshes widgets, where before only the editor Run button did.
+- **`WidgetResult.write(projectName:json:)`** joins `fromAppGroup` in `WidgetNode.swift`, which already owns the suite name.
+- **`LoomProject.hasWidget`** becomes a regex over `main.ts` source rather than a `widget.ts` file-existence check. Deliberately not `config.widget != nil`: that would force boilerplate `widget: {}` on authors who don't need `refreshAfter`, and spins up a Zod-loaded `JSContext` per project on every App Group index update.
+- **Preview** renders at true WidgetKit points then applies a uniform `scaleEffect` to fit the sheet — layout stays faithful rather than being re-laid-out smaller, which would be a lie. Also finally applies `widgetContainerBackground(from:)` (which `WidgetView.swift:7` always said the preview host should) and drops `projectName` so preview taps stop writing to the live KV store.
+
+**Open questions (must resolve before coding):**
+- [x] Per-size API — resolved: call once, return node or size map
+- [x] Multi-file imports (`import './widget-ui'`) — resolved: deferred at the time; no module resolver existed, and that was a separate feature every script benefits from. **Since shipped** — see ADR-016. A `widget` export in a helper still needs an explicit re-export from `main.ts`, since `LoomProject.hasWidget` only reads `main.ts`.
+- [x] Migration for existing `widget.ts` — resolved: hard cut, pre-v1, no compat path
+
+**Dependencies:**
+- None. Supersedes the two-file model in ADR-004/006.
+
+---
+
+## Loom.health — all HealthKit types — pre-flight
+
+Milestone: M4 — Full Native Bridge (post-ship rework, ad-hoc request)
+Backlog item: n/a — user asked to make "state of mind" fetchable, then to generalise to *all* HealthKit types
+
+**What exactly is being built:**
+
+`HealthBridge` currently hand-maps 10 quantity types and nothing else. The iOS 27 SDK has ~215 readable types (120 quantity, 72 category, 6 characteristic, 9 clinical, 2 correlation, 2 scored assessment, 1 document, plus the workout / stateOfMind / ECG / audiogram / visionPrescription / medicationDoseEvent singletons). Replacing `getQuantity()` with one polymorphic `read()` that covers all of them.
+
+```ts
+Loom.health.read(type, opts?)    // any sample type
+Loom.health.stats(type, opts?)   // source-de-duplicated aggregation
+Loom.health.profile()            // the 6 characteristics (not samples — no date range)
+Loom.health.saveWorkout(opts)    // unchanged
+```
+
+`getQuantity()` is deleted, not aliased (user sign-off: pre-1.0, no external users, and `health.md` needs rewriting either way). Clinical records deferred (user sign-off) — they need a `com.apple.developer.healthkit.access` entitlement, an `NSHealthClinicalHealthRecordsShareUsageDescription` key, per-object authorization, and extra App Review scrutiny. The resolver still probes the family, so `read("allergyRecord")` resolves the type and then rejects with an explicit "clinical records are not enabled" message rather than "unknown type" — the distinction matters for whoever turns it on later.
+
+**Implementation approach:**
+
+- **Type resolution without a table.** Every `HKObjectType.<family>Type(forIdentifier:)` is `nullable` (confirmed in `HKObjectType.h:52-63`) and identifier raw values are mechanically `HK<Family>TypeIdentifier` + PascalCase (confirmed in `HKTypeIdentifiers.h`). So: probe families in order, first non-nil wins. Accepted spellings per name — raw (`HKQuantityTypeIdentifierStepCount`), prefix + as-is (`StepCount`), prefix + first-char-uppercased (`stepCount`). Output names are the identifier minus prefix with the first char lowercased, which round-trips through that third form for every type *including* leading-acronym ones (`VO2Max` → `vO2Max` → uppercase-first → `VO2Max`). Singletons get an explicit ~7-entry dictionary, reverse-looked-up for output naming.
+- **Units, three tiers:** `opts.unit` via `HKUnit(from:)` → `preferredUnitsForQuantityTypes:` (the user's own Health-app choice, or the locale default — `HKHealthStore.h:399`) → dimensional probe via `isCompatibleWithUnit:` (`HKObjectType.h:186`). The resolved unit is always echoed back on every sample, so a script can verify rather than assume. Deletes the hardcoded 9-type `preferredUnit(for:)` switch.
+- **`stats()`** — `HKStatisticsCollectionQuery` when `opts.bucket` is set, `HKStatisticsQuery` otherwise. This is a correctness fix, not sugar: summing raw `stepCount` samples in JS double-counts when both an iPhone and a Watch log the same steps; `HKStatistics` de-dups by source and JS cannot. `op` defaults off `HKQuantityType.aggregationStyle` (`HKObjectType.h:179`) — cumulative→sum, discrete→average — so the common call needs no options. No bucket → one object; bucket → array (the call site says which it asked for).
+- **Category values** — one-line-per-enum switch returning `HKCategoryValueSleepAnalysis(rawValue:)` etc., with `String(describing:)` for the case name. No hand-typed strings. Raw `value` always present; `valueName` only when decodable.
+- **Batched authorization** — first health call requests every type in `loom()`'s `health.read` at once, resolved through the same resolver, then falls back to per-call requests for undeclared types. `LoomConfig.HealthConfig` is extracted end-to-end already but `health.md` documents it as decorative; this makes it load-bearing and stops "10 types = 10 dialogs". `HealthBridge` gains a `project` parameter (matching `FilesBridge`/`DatabaseBridge`/`PhotosBridge`) and calls the existing `nonisolated static ConfigExtractor.extract(for:)` lazily.
+- **Sorting + `limit`** — descending by start date by default, fixing the third documented limitation.
+- Fixes the live bug where `sleepAnalysis` silently returned step-count data.
+- Debug self-check in the existing `#if DEBUG` block: pins the raw-value convention the whole design rests on (`HKQuantityTypeIdentifier.stepCount.rawValue == "HKQuantityTypeIdentifierStepCount"`) and round-trips a name from each family through resolve → shortName.
+
+**Files:** `Loom/Bridge/HealthBridge.swift` (rewrite), `Loom/Bridge/LoomBridge.swift` (pass `project`), `Loom/LoomApp.swift` (self-check), `Loom/Resources/Docs/api-reference/health.md` (rewrite), `.claude/decisions/012-health-type-resolution.md` (new).
+
+**Open questions:** None — both resolved with the user (clinical deferred; `getQuantity` replaced).
+
+---
+
+## M7 — Background Tasks & Release Polish — pre-flight
+
+Milestone: M7 — Background Tasks & Release Polish
+Backlog items: BGAppRefreshTask, BGProcessingTask, `.loom` ZIP export/import, Curated `Loom.*` autocomplete in Runestone
+(5th checklist item, in-app documentation site, already shipped — sitting uncommitted in the working tree, see DONE.md)
+
+**Done means:** Background tasks fire correctly. Projects export/import as `.loom` files. Curated autocomplete works. App is ready for TestFlight.
+
+Grounded against the actual codebase (three research passes) plus two docs pages already written for these exact features (`Loom/Resources/Docs/guides/background-tasks.md`, `guides/exporting-projects.md`) — both flagged `> Status: planned, not yet available` and describe the intended product design in detail. Treating those as the locked product spec rather than re-deriving one; implementation below matches them, and both banners get flipped once shipped.
+
+---
+
+### 1. Background Tasks — `BGAppRefreshTask` / `BGProcessingTask`
+
+**What's being built:** Two generic, statically-registered background task identifiers — one per task *type*, not per project (iOS requires `BGTaskSchedulerPermittedIdentifiers` to be a fixed Info.plist array; there's no way to register one identifier per dynamically-created iCloud project folder). Each identifier's handler fans out at run time over whatever projects currently declare the matching trigger. This is the same shape as ADR-008's generic-App-Intents pattern, applied to a new constraint: a single handler invocation must iterate *all* matching projects inside one shared, OS-imposed time budget, not resolve to one project the way an intent call does.
+
+Already in place, confirmed by source read — no changes needed:
+- `LoomConfig.Triggers` (`Loom/Projects/LoomConfig.swift:10,17-20`) already has `backgroundRefresh`/`backgroundProcessing` booleans, extracted end-to-end by `ConfigExtractor.extract(for:)` (`Loom/Projects/ConfigExtractor.swift`, `nonisolated static func extract(for project: LoomProject) -> LoomConfig`, synchronous).
+- `RunTrigger.backgroundRefresh` / `.backgroundProcessing` cases already exist (`Loom/Execution/RunTrigger.swift`).
+- `ScriptRunner.shared.run(project:trigger:input:) async -> (status: RunStatus, result: String?)` (`Loom/Execution/ScriptRunner.swift:40`) has no MainActor dependency in the run pipeline — safe to call from a `BGTask` handler.
+- `Loom.ui.*` bridge calls already degrade to nil/empty when there's no `.foregroundActive` scene (`Loom/Bridge/UIHelpers.swift:4-12`, `UIBridge.swift`) — a script that happens to call `Loom.ui.alert` during a background run won't hang, it just resolves empty. Nothing new needed here.
+- `Info.plist` already declares `UIBackgroundModes: [fetch, processing]`. Missing: `BGTaskSchedulerPermittedIdentifiers`.
+- No `AppDelegate` exists (M1 decision, UIScene-only) and none is needed — `BGTaskScheduler.shared.register(...)` just needs to run before app launch completes, and `LoomApp.init()` (`Loom/LoomApp.swift:8-15`, already runs the `#if DEBUG` self-checks) is the existing, correct hook. `LoomApp.swift:25-27` already has an empty `.onChange(of: scenePhase)` stub with the comment *"Background/foreground hooks wired in M7"* — that's where scheduling goes.
+- Bundle ID confirmed: `uk.co.joerourke.Loom` → identifiers `uk.co.joerourke.Loom.refresh` / `uk.co.joerourke.Loom.processing`.
+
+**Implementation approach:**
+- New `Loom/Background/BackgroundTaskManager.swift` (new folder, matches the one-folder-per-subsystem convention: `Widget/`, `Intents/`, `Bridge/`, etc.):
+  ```swift
+  enum BackgroundTaskManager {
+      static let refreshIdentifier = "uk.co.joerourke.Loom.refresh"
+      static let processingIdentifier = "uk.co.joerourke.Loom.processing"
+
+      static func registerHandlers() { /* BGTaskScheduler.shared.register(...) x2, called from LoomApp.init() */ }
+      static func scheduleAll() { /* submit both requests, called on scenePhase → .background */ }
+
+      // handleRefresh/handleProcessing: resubmit immediately (requests are one-shot),
+      // set task.expirationHandler to cancel, then:
+      //   for project in LoomProjectResolver.allProjects() {
+      //       guard let config = ... ConfigExtractor.extract(for: project), triggers.backgroundX else { continue }
+      //       _ = await ScriptRunner.shared.run(project: project, trigger: .backgroundX, input: [:])
+      //   }
+      //   task.setTaskCompleted(success: true)
+  }
+  ```
+- `BGProcessingTaskRequest`: `requiresExternalPower = true`, `requiresNetworkConnectivity = true` (matches "charging + wifi" in the doc).
+- `LoomApp.swift`: call `BackgroundTaskManager.registerHandlers()` in `init()`; call `.scheduleAll()` in the `scenePhase` stub when phase becomes `.background`.
+- No caching of "which projects want background triggers" — every fan-out re-enumerates `LoomProjectResolver.allProjects()` and re-runs `ConfigExtractor.extract(for:)` per project (a JSC eval of a small config slice, not a full script execution — cheap). This matches ADR-007's already-accepted "on-demand, not cached" stance, reconfirmed during M5. `// ponytail: re-extracts every project's config on every background fire; add a cached triggers-index only if real project counts start blowing the ~30s BGAppRefreshTask budget.`
+- Debug self-check: `BackgroundTaskManager.runSelfCheck()` added to `LoomApp.init()`'s existing `#if DEBUG` block, matching `ConfigExtractor`/`IntentInputParser`/`ModuleBundler`/`SiriLint`'s existing convention — asserts the two identifiers are non-empty and distinct (the non-trivial branch here is the trigger-matching filter, worth one cheap invariant).
+- Update `Loom/Resources/Docs/guides/background-tasks.md`: flip the `planned, not yet available` banner, remove the "do not exist in the config schema yet" line from Current Limitations (everything else in that doc — timing expectations, permission behavior, error handling — already describes the real shipped behavior accurately, no rewrite needed beyond the status).
+
+**Open questions:** None — design locked in by the existing guide doc; implementation is a direct translation of it plus the ADR-008-style fan-out for the static-identifier constraint.
+
+---
+
+### 2. `.loom` ZIP export/import
+
+**What's being built:** Export a project folder as a `.loom` (ZIP) file via the share sheet; import a `.loom` file (from Files, AirDrop, or an email attachment) back into a new project folder. Per the existing doc, `secrets.json` is unconditionally excluded from every export — and per source research, **no `secrets.json` producer exists anywhere in the codebase yet** (Keychain-backed secrets is a separate, unchecked `BACKLOG.md` item under "Project Model & File System," not one of M7's four checklist items). Scope boundary: this task ships the exclusion filter (correct and forward-compatible whether or not a file exists to exclude) and does **not** build the Keychain secrets system or the "prompted to fill in secrets on import" flow the doc describes — that depends on a feature that isn't built.
+
+**Gap found:** no ZIP capability exists in this codebase at all (confirmed: no ZIPFoundation/archive library in `Package.resolved`, no use of `Compression` framework, which only does raw DEFLATE anyway — not the ZIP container format). Adding **ZIPFoundation** (pure Swift, zero further dependencies, the de facto standard for this on Apple platforms) via the same pbxproj hand-edit pattern already used for MarkdownUI (`git show` on that commit gives the exact template: `XCRemoteSwiftPackageReference` + `XCSwiftPackageProductDependency` + frameworks-build-phase entries). Worth a short ADR (new dependency for a core feature). No real alternative — hand-rolling ZIP's central-directory format is not a "few lines" job, so this isn't a close call.
+
+**Implementation approach:**
+- New `Loom/Projects/ProjectArchiver.swift` — ZIP mechanics only (mirrors how `ProjectScaffolder` is a separate file-mechanics helper that `ProjectStore` orchestrates):
+  - `export(_ project: LoomProject) throws -> URL` — stages a filtered copy of the project folder into a temp directory (everything except `secrets.json` by filename), then zips the staging directory to `<tmp>/<projectName>.loom` using ZIPFoundation's directory-zip convenience API.
+  - `importFolder(from zipURL: URL, projectName: String, into containerURL: URL) throws -> URL` — unzips into a new subfolder, returns its URL.
+- Two new thin orchestration methods on `Loom/Projects/ProjectStore.swift`, matching the existing `createProject`/`deleteProject`/`renameProject` trio exactly:
+  - `exportProject(_ project: LoomProject) throws -> URL` → calls `ProjectArchiver.export`.
+  - `importProject(from zipURL: URL) throws` → derives project name from the filename, calls `ProjectArchiver.importFolder`, then `loadProjects()`. Collision handling matches existing `createProject` behavior exactly (`FileManager.createDirectory(..., withIntermediateDirectories: false)` throws on an existing folder, surfaced as an alert by the caller) — no new auto-rename logic invented.
+- UI, `Loom/Projects/ProjectListView.swift`:
+  - **Export** — new item in the existing per-project `.contextMenu` (alongside Rename/Delete, lines 16-25), calls `projectStore.exportProject(project)`, presents the result via `ShareSheet` (the `UIActivityViewController` wrapper already defined in `Loom/Navigation/LogsView.swift:180` for log export — de-`private`-ing it for reuse rather than duplicating ~6 lines).
+  - **Import** — new toolbar button next to the existing `+` (line 32-37), presents `UIDocumentPickerViewController` scoped to the new `.loom` UTType (same presentation pattern as `Loom.files.pick()` in `Loom/Bridge/FilesBridge.swift:66-91`, adapted for `Data` instead of `String` since a `.loom` is binary), calls `projectStore.importProject(from:)`.
+- `Info.plist`: register a `.loom` UTType (`UTExportedTypeDeclarations`, conforms to `public.zip-archive`) + `CFBundleDocumentTypes`, so Files/AirDrop/Mail can hand a `.loom` file to Loom directly — this is what the doc's "Open a `.loom` file from Files, an email attachment, AirDrop" wording actually requires (an in-app Import button alone doesn't cover AirDrop receipt or "Open In"). No custom document icon — falls back to the generic one, cosmetic and cheap to add later.
+- `LoomApp.swift`: extend the existing `.onOpenURL` closure (line 21-23) to branch on `url.isFileURL && url.pathExtension == "loom"` → `projectStore.importProject(from: url)`, else the existing `DeepLinkHandler.handle(url)` path for the `loom://` scheme. Both branches already share one entry point, so this is a small `if/else`, not new plumbing.
+- Update `Loom/Resources/Docs/guides/exporting-projects.md`: flip the banner, update Current Limitations, and correct the "you'll be prompted to fill secrets in" line in Intended Workflow → Import to note that's still pending the Keychain secrets system rather than implying it ships now.
+
+**Open questions:** None — scope boundary (secrets.json exclusion only, not the Keychain secrets system itself) follows directly from what M7's checklist actually includes vs. what's a separate backlog item.
+
+---
+
+### 3. Curated `Loom.*` autocomplete in Runestone — shipped, widened in scope
+
+Confirmed Runestone 0.5.2 ships zero completion API (verified again against the pinned checkout,
+rev `592434a`) — built entirely on primitives it *does* expose (`inputAccessoryView`,
+`caretRect(for:)` in scroll-content coordinates). Widened well past "curated autocomplete" per a
+full requirements pass with the user: a keyboard pill bar (fixed code keys + curated/AI
+suggestion pills) and single-line inline AI ghost text, reusing the M8 assistant's provider
+plumbing behind a separate, off-by-default completions provider. Full design, decisions, and
+verification steps captured in `.claude/decisions/013-editor-suggestions.md`; see DONE.md for the
+landed summary.
+
+---
+
+### Implementation order
+
+1. Background Tasks (self-contained, no new dependency, design fully locked by the existing doc) — `Info.plist` → `BackgroundTaskManager.swift` → `LoomApp.swift` wiring → self-check → docs banner flip.
+2. `.loom` export/import — add ZIPFoundation + ADR → `ProjectArchiver.swift` → `ProjectStore` methods → `ProjectListView.swift` UI → `Info.plist` UTType → `LoomApp.swift` `.onOpenURL` branch → docs banner flip.
+3. ~~Autocomplete~~ — done, see above.
+4. Commit the already-shipped, currently-uncommitted in-app documentation site (separately, whenever you want — not blocking the above; flagging it exists in the working tree since it's a completed M7 item sitting alongside everything else).
+
+Each of 1–3 gets built, then a Simulator run to verify before moving to the next (background tasks are hard to verify live via BGTaskScheduler timing in-simulator, but registration-doesn't-crash and the fan-out logic are verifiable; export/import and autocomplete get real Simulator interaction).
+
+---
+
+<!-- M5 status note archived below for reference — all items shipped, see DONE.md -->
+
+<!--
 ## M5 — Siri & App Intents — code complete, one manual step left
 
 All 9 backlog items shipped (see DONE.md for each, ADR-007/008/009 for the non-obvious decisions). `LoomShareExtension` target created and `Loom.share` implemented against it (ADR-009).
@@ -41,6 +457,9 @@ All 9 backlog items shipped (see DONE.md for each, ADR-007/008/009 for the non-o
 - `RunTrigger` for App-Intent-originated runs collapses to `.shortcut` (leaves `.siri` unused) — confirm, or point to a real Siri-vs-Shortcuts signal.
 - `entities` config shape (`{ <typeName>: { displayName, fields, provider } }`) — designed from scratch, no prior art; confirm before scripts start depending on it.
 - Config-extraction safety — confirmed reusing ADR-002's "no timeout, memory-guard only" stance rather than new watchdog infra.
+
+All four resolved implicitly by shipping as designed — see DONE.md M5 entries. Status as of 2026-08-01: fully shipped, including the App Groups capability.
+-->
 
 ---
 
@@ -700,3 +1119,5 @@ A `ConsoleView` SwiftUI view that shows live `LogEntry` items from the active `R
 **Dependencies:**
 - Blocked by: `console.log` capture, JSC execution context
 -->
+
+<!-- API Playground pre-flight archived — shipped 2026-08-11, see DONE.md and ADR-023. -->

@@ -1,5 +1,6 @@
 import Foundation
 import JavaScriptCore
+import WidgetKit
 
 actor ScriptRunner {
     static let shared = ScriptRunner()
@@ -12,9 +13,13 @@ actor ScriptRunner {
 
         Task {
             do {
-                let source = try String(contentsOf: project.mainFileURL, encoding: .utf8)
-                let compiled = try await SWCCompiler.shared.compile(source)
-                let bundled = ModuleBundler.bundle(compiledJS: compiled)
+                let bundled = try await ModuleBundler.bundle(project: project, session: session)
+                // Config extraction fails silently by design (falls back to name-only), so
+                // without this a script whose loom() config references an imported binding runs
+                // with no permissions or intent and nothing anywhere says why.
+                if let diagnostic = ConfigExtractor.configDiagnostic(for: project) {
+                    session.append(LogEntry(runId: runId, projectName: project.name, level: .warn, message: diagnostic, data: nil))
+                }
                 await withCheckedContinuation { continuation in
                     executeOnThread(bundled: bundled, project: project, runId: runId, trigger: trigger, input: input, session: session) {
                         continuation.resume()
@@ -76,8 +81,14 @@ actor ScriptRunner {
             return
         }
 
+        // Retained so the status check below can tell "script finished" from "the payload never
+        // ran". JSC calls this synchronously on this thread during evaluateScript, so the plain
+        // capture is safe.
+        var lastException: String?
+
         ctx.exceptionHandler = { _, ex in
             let msg = ex?.toString() ?? "Unknown JS error"
+            lastException = msg
             let entry = LogEntry(runId: runId, projectName: session.projectName, level: .error, message: msg, data: nil)
             session.append(entry)
         }
@@ -86,7 +97,7 @@ actor ScriptRunner {
         let bridge = LoomBridge(ctx: ctx, project: project, session: session, runLoop: runLoop)
         bridge.inject()
         injectCtx(ctx: ctx, runId: runId, trigger: trigger, input: input)
-        ctx.evaluateScript("var __loom_result__ = undefined; var __loom_error__ = undefined; var __loom_entities_result__ = undefined;")
+        ctx.evaluateScript("var __loom_result__ = undefined; var __loom_error__ = undefined; var __loom_entities_result__ = undefined; var __loom_widget_result__ = undefined; var __loom_widget_error__ = undefined;")
         ctx.evaluateScript(bundled)
 
         // JSC drains microtasks after each evaluateScript call.
@@ -107,17 +118,42 @@ actor ScriptRunner {
             let entry = LogEntry(runId: runId, projectName: session.projectName, level: .error, message: msg, data: nil)
             session.append(entry)
             session.finish(status: .error, result: nil)
+        } else if resultVal?.isUndefined != false, lastException != nil {
+            // The payload never reached executionFooter: a SyntaxError anywhere in the bundle, or
+            // a throw at module top level. Neither sentinel is ever defined in that case, so
+            // without this the run is recorded as a success with a nil result while the real
+            // error sits in the log. The handler above has already logged the message.
+            // Note this can't be a JS-side try/catch around the entry — that can't catch parse
+            // errors, which is the case most in need of catching.
+            session.finish(status: .error, result: nil)
         } else {
+            // A failing `widget` export is reported but never fails the run — it's presentation,
+            // not the script's job. Appended before finish() so it lands in the session's logs.
+            if let widgetErrVal = ctx.evaluateScript("__loom_widget_error__"),
+               !widgetErrVal.isUndefined, let msg = widgetErrVal.toString(), msg != "undefined" {
+                let entry = LogEntry(runId: runId, projectName: session.projectName, level: .warn, message: "Widget: \(msg)", data: nil)
+                session.append(entry)
+            }
+
             session.finish(status: .success, result: (resultVal?.isUndefined == false) ? resultVal?.toString() : nil)
 
-            // __loom_result__ is only ever set once entity collection has settled (see
-            // ModuleBundler.executionFooter), so it's safe to read __loom_entities_result__
-            // right here — no separate wait needed.
+            // __loom_result__ is only ever set once entity and widget collection have settled
+            // (see ModuleBundler.executionFooter), so it's safe to read both results right here
+            // — no separate wait needed.
             if let entitiesVal = ctx.evaluateScript("__loom_entities_result__"),
                !entitiesVal.isUndefined, !entitiesVal.isNull,
                let entitiesJSON = entitiesVal.toString() {
                 let config = ConfigExtractor.extract(for: project)
                 EntityIndexer.index(project: project, entitiesJSON: entitiesJSON, config: config)
+            }
+
+            // Every trigger refreshes the widget, not just the editor's Run button — Siri, the
+            // URL scheme and the Share Extension all land here too.
+            if let widgetVal = ctx.evaluateScript("__loom_widget_result__"),
+               !widgetVal.isUndefined, !widgetVal.isNull,
+               let widgetJSON = widgetVal.toString() {
+                WidgetResult.write(projectName: project.name, json: widgetJSON)
+                Task { @MainActor in WidgetCenter.shared.reloadAllTimelines() }
             }
         }
 

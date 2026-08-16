@@ -7,7 +7,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT="$REPO_ROOT/Loom/Loom/Resources/Vendors"
+OUT="$REPO_ROOT/Loom/Resources/Vendors"
 TMP="$(mktemp -d)"
 
 cleanup() { rm -rf "$TMP"; }
@@ -40,7 +40,11 @@ bundle zod
 bundle cheerio
 bundle mathjs
 bundle marked
-bundle csv-parse csv-parse/browser/esm
+# The /sync entry, not the default one. csv-parse's stream API needs setTimeout, which
+# JavaScriptCore does not have and Loom does not inject — the streaming build bundles fine and
+# then throws "setTimeout is not a function" the moment a script calls parse(). /sync exports a
+# plain parse(input, options) => records[] with no timers involved.
+bundle csv-parse csv-parse/browser/esm/sync
 bundle yaml
 
 echo "Done."

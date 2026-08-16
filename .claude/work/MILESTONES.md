@@ -44,6 +44,7 @@ Each milestone is a coherent, testable slice of the app. "Done means" is the acc
 - [x] `Loom.db.kv` / `Loom.kv` — NSUbiquitousKeyValueStore wrapper
 - [x] `Loom.log` — structured logging → SQLite logs table
 - [x] `Loom.ui` — alert, input, table (imperative, await-able)
+- [x] `Loom.ui.web` — htmx web sheet; `.html` page templates + routes returning HTML fragments (post-M3 addition, ad-hoc request; ADR-014)
 - [x] `Loom.notify` — local notifications via UNUserNotificationCenter
 - [x] Permission system — inline per-bridge request (M3 scope: notifications only; full infra deferred to M4)
 - [x] SQLite log store — schema, thread-safe writes
@@ -109,4 +110,18 @@ Each milestone is a coherent, testable slice of the app. "Done means" is the acc
 - [ ] BGAppRefreshTask — register + handle for `triggers.backgroundRefresh: true`
 - [ ] BGProcessingTask — register + handle for `triggers.backgroundProcessing: true`
 - [ ] `.loom` ZIP export/import (secrets.json excluded)
-- [ ] Curated `Loom.*` autocomplete in Runestone
+- [x] Curated `Loom.*` autocomplete in Runestone — shipped as a keyboard pill bar + inline AI ghost text (widened from the original scope; see DONE.md)
+- [x] In-app documentation site — full API reference, guides/tutorials, troubleshooting/limitations, with navigation and diagrams
+
+---
+
+## Milestone 8 — AI Authoring Assistant
+**Done means:** You can describe a script in plain English and get a working `main.ts`. Refine it conversationally. Bring your own key/model (Anthropic-wire or OpenAI-wire, any base URL). The assistant knows the `Loom.*` API surface via the bundled docs and never ships code that fails to compile or fails static config extraction.
+
+- [x] User-defined AI providers (name, wire format, base URL, model, key) — Keychain-backed, separate from the existing `Loom.ai` Claude/Gemini keys
+- [x] Streaming SSE client with tool use for both Anthropic Messages and OpenAI Chat Completions wire formats
+- [x] `authoring-rules.md` skill doc + `DocCatalog`-derived manifest, injected as system context
+- [x] Tools: `read_doc`, `read_file`, `write_file` (create/update only, path-guarded), `check_script` (compile + config-extract + lint), `run_script`
+- [x] Pre-write snapshot + "Revert AI changes" — auto-apply has no other undo
+- [x] Assistant panel as a third tab in the editor's bottom panel (Console / Siri / Assistant)
+- [x] "Describe it" project creation flow — prompts the assistant immediately after scaffolding

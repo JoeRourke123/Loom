@@ -27,6 +27,7 @@ final class LoomBridge {
     private let health: HealthBridge
     private let ai: AIBridge
     private let share: ShareBridge
+    private let activity: ActivityBridge
 
     nonisolated init(ctx: JSContext, project: LoomProject, session: RunSession, runLoop: CFRunLoop) {
         self.ctx = ctx
@@ -38,7 +39,7 @@ final class LoomBridge {
         files     = FilesBridge(ctx: ctx, project: project, runLoop: runLoop)
         db        = DatabaseBridge(ctx: ctx, project: project, runLoop: runLoop)
         kv        = KVBridge(ctx: ctx, project: project)
-        ui        = UIBridge(ctx: ctx, project: project, runLoop: runLoop)
+        ui        = UIBridge(ctx: ctx, project: project, session: session, runLoop: runLoop)
         notify    = NotifyBridge(ctx: ctx, project: project, runLoop: runLoop)
         device    = DeviceBridge(ctx: ctx)
         clipboard = ClipboardBridge(ctx: ctx)
@@ -48,9 +49,10 @@ final class LoomBridge {
         calendar  = CalendarBridge(ctx: ctx)
         photos    = PhotosBridge(ctx: ctx, project: project)
         camera    = CameraBridge(ctx: ctx, project: project)
-        health    = HealthBridge(ctx: ctx)
+        health    = HealthBridge(ctx: ctx, project: project)
         ai        = AIBridge(ctx: ctx)
         share     = ShareBridge(ctx: ctx)
+        activity  = ActivityBridge(ctx: ctx, project: project, session: session)
     }
 
     // Sets up the Loom global and wires console to LogBridge.
@@ -83,9 +85,55 @@ final class LoomBridge {
         loom.setObject(health.makeObject(),    forKeyedSubscript: "health"    as NSString)
         loom.setObject(ai.makeObject(),        forKeyedSubscript: "ai"        as NSString)
         loom.setObject(share.makeObject(),     forKeyedSubscript: "share"     as NSString)
+        loom.setObject(activity.makeObject(),  forKeyedSubscript: "activity"  as NSString)
         ctx.setObject(loom, forKeyedSubscript: "Loom" as NSString)
 
+        injectBase64()
         log.wireConsole()
+    }
+
+    // atob/btoa are web APIs, not language features, so a bare JSContext has neither — and their
+    // absence is not cosmetic. cheerio's entity decoder reads
+    //     typeof atob === "function" ? atob(x) : typeof Buffer.from === "function" ? …
+    // and `typeof Buffer.from` evaluates `Buffer` before typeof applies, so on JSC it throws
+    // "Can't find variable: Buffer" rather than falling through safely. The result was that
+    // cheerio could not parse any HTML containing an entity — i.e. essentially any real page —
+    // even though it ships as a supported vendor package.
+    //
+    // Deliberately faithful to the web contract: atob returns a "binary string" (one UTF-16 code
+    // unit per byte, latin-1), NOT UTF-8-decoded text, and btoa rejects anything above U+00FF.
+    // Decoding as UTF-8 here would corrupt every non-ASCII byte and be far harder to spot.
+    private nonisolated func injectBase64() {
+        let atob: @convention(block) (String) -> JSValue? = { encoded in
+            let context = JSContext.current() ?? self.ctx
+            let trimmed = encoded.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let data = Data(base64Encoded: trimmed, options: [.ignoreUnknownCharacters]) else {
+                context.exception = JSValue(newErrorFromMessage: "atob: input is not valid base64", in: context)
+                return nil
+            }
+            let scalars = String.UnicodeScalarView(data.map { UnicodeScalar($0) })
+            return JSValue(object: String(scalars), in: context)
+        }
+
+        let btoa: @convention(block) (String) -> JSValue? = { raw in
+            let context = JSContext.current() ?? self.ctx
+            var bytes: [UInt8] = []
+            bytes.reserveCapacity(raw.unicodeScalars.count)
+            for scalar in raw.unicodeScalars {
+                guard scalar.value < 256 else {
+                    context.exception = JSValue(
+                        newErrorFromMessage: "btoa: characters above U+00FF cannot be encoded",
+                        in: context
+                    )
+                    return nil
+                }
+                bytes.append(UInt8(scalar.value))
+            }
+            return JSValue(object: Data(bytes).base64EncodedString(), in: context)
+        }
+
+        ctx.setObject(atob, forKeyedSubscript: "atob" as NSString)
+        ctx.setObject(btoa, forKeyedSubscript: "btoa" as NSString)
     }
 
     // Blocks the script thread until the executor calls resolve or reject,

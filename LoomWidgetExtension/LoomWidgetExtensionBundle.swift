@@ -5,5 +5,6 @@ import SwiftUI
 struct LoomWidgetExtensionBundle: WidgetBundle {
     var body: some Widget {
         LoomWidget()
+        LoomLiveActivity()
     }
 }

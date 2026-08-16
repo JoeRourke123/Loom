@@ -37,34 +37,28 @@ var __loom_TextEncoder__ = (typeof TextEncoder !== 'undefined') ? TextEncoder : 
   };
 };
 
-// ── Buffer ────────────────────────────────────────────────────────────────────
-// Decode base64 → Uint8Array directly — no atob() needed.
-var __loom_Buffer__ = {
-  from: function(base64, encoding) {
-    if (encoding !== 'base64') throw new Error('[swc-compat] Buffer.from: unsupported encoding: ' + encoding);
-    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    var lookup = new Uint8Array(128);
-    for (var i = 0; i < 64; i++) lookup[chars.charCodeAt(i)] = i;
-    var len = base64.length;
-    while (len > 0 && base64[len - 1] === '=') len--;
-    var out = new Uint8Array(Math.floor(len * 3 / 4));
-    for (var i = 0, j = 0; i < len; ) {
-      var a = lookup[base64.charCodeAt(i++)];
-      var b = lookup[base64.charCodeAt(i++)];
-      var c = i < len ? lookup[base64.charCodeAt(i++)] : 0;
-      var d = i < len ? lookup[base64.charCodeAt(i++)] : 0;
-      out[j++] = (a << 2) | (b >> 4);
-      if (j < out.length) out[j++] = ((b & 0xF) << 4) | (c >> 2);
-      if (j < out.length) out[j++] = ((c & 0x3) << 6) | d;
-    }
-    return out;
-  }
-};
+// ── fs / path (wasm binary loading) ───────────────────────────────────────────
+// @swc/wasm ships the 19 MB binary as a separate wasm_bg.wasm and its glue loads it with
+//   const path = require('path').join(__dirname, 'wasm_bg.wasm');
+//   const bytes = require('fs').readFileSync(path);
+// SWCCompiler defines __loom_wasm_bytes__ (a Uint8Array over the bundled resource, made
+// without copying) before evaluating wasm.js, so readFileSync just hands that back and the
+// filename never matters. @swc/wasm-typescript used to inline the binary as base64, which
+// is why this shim previously carried a hand-rolled Buffer.from decoder instead.
+var __dirname = '';
 
 // ── require() shim ────────────────────────────────────────────────────────────
 var require = function(mod) {
   if (mod === 'util') return { TextDecoder: __loom_TextDecoder__, TextEncoder: __loom_TextEncoder__ };
-  if (mod === 'node:buffer' || mod === 'buffer') return { Buffer: __loom_Buffer__ };
+  if (mod === 'path') return { join: function() { return 'wasm_bg.wasm'; } };
+  if (mod === 'fs') return {
+    readFileSync: function() {
+      if (typeof __loom_wasm_bytes__ === 'undefined') {
+        throw new Error('[swc-compat] __loom_wasm_bytes__ not set — SWCCompiler must define it before evaluating wasm.js');
+      }
+      return __loom_wasm_bytes__;
+    }
+  };
   throw new Error('[swc-compat] Unknown module: ' + mod);
 };
 

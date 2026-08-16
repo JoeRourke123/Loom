@@ -6,11 +6,8 @@ struct ConsoleView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar
+            // Toolbar — no title; the segmented control directly above already names the panel.
             HStack {
-                Text("Console")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
                 Spacer()
                 if let session, !session.logs.isEmpty {
                     Button {

@@ -5,32 +5,42 @@ struct EditorContainerView: View {
     @State private var presenter: ProjectFolderPresenter?
     @State private var reloadTrigger = UUID()
     @State private var viewModel = ScriptRunnerViewModel()
-    @State private var isConsoleExpanded = false
-    @State private var bottomPanelTab: BottomPanelTab = .console
-    @State private var isWidgetPreviewShowing = false
-    @State private var widgetPreviewRefreshToken = UUID()
+    @State private var panel = EditorPanelCoordinator.shared
+    // Owned here, not by EditorView's Coordinator: long-press-for-docs needs a real SwiftUI
+    // view in the real hierarchy to present a sheet from — a UIHostingController with no parent
+    // view controller (which is what the accessory bar's hosting controller is) can't reliably
+    // present one itself.
+    @State private var suggestions = SuggestionEngine()
     @State private var projectFiles: [URL] = []
     @State private var selectedFileURL: URL? = nil
     @State private var isNewFileShowing = false
     @State private var isDeletingFile = false
-    private let consoleHeight: CGFloat = 200
 
     private var activeFileURL: URL { selectedFileURL ?? project.mainFileURL }
     private var activeFileName: String { activeFileURL.lastPathComponent }
     private var existingFileNames: Set<String> { Set(projectFiles.map(\.lastPathComponent)) }
-    private var hasWidget: Bool { existingFileNames.contains("widget.ts") }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Editor
+        // GeometryReader stays *outside* the ignoresSafeArea below so it still reports the real
+        // bottom inset — with a tab bar accessory present that covers tab bar + strip + home
+        // indicator, which is exactly the height the editor has to inset its content by.
+        GeometryReader { geo in
             ZStack(alignment: .bottom) {
                 EditorView(
                     fileURL: activeFileURL,
                     externalReloadTrigger: reloadTrigger,
-                    onCompileError: { viewModel.compileError = $0 }
+                    bottomContentInset: geo.safeAreaInsets.bottom,
+                    onCompileError: { viewModel.compileError = $0 },
+                    suggestions: suggestions
                 )
+                // .container alone left .keyboard un-ignored, so when the keyboard rose SwiftUI
+                // both shrank this view's frame AND fed the same height into
+                // bottomContentInset below (geo.safeAreaInsets.bottom is the union of container +
+                // keyboard insets) — a double-count that grew a dead scroll region under the
+                // keyboard. Ignoring .keyboard too means exactly one of those applies the inset.
+                .ignoresSafeArea([.container, .keyboard], edges: .bottom)
 
-                // Compile error banner
+                // Banner keeps the safe area so it floats above the bars rather than under them.
                 if let err = viewModel.compileError {
                     CompileErrorBanner(error: err) {
                         viewModel.compileError = nil
@@ -40,33 +50,7 @@ struct EditorContainerView: View {
                     .padding(.horizontal, 12)
                 }
             }
-
-            // Bottom panel — Console / Siri preview share one slot, switched via segmented
-            // control, rather than a third independent toolbar button + panel.
-            if isConsoleExpanded {
-                VStack(spacing: 0) {
-                    Divider()
-                    Picker("Panel", selection: $bottomPanelTab) {
-                        Text("Console").tag(BottomPanelTab.console)
-                        Text("Siri").tag(BottomPanelTab.siri)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 6)
-                    .padding(.bottom, 4)
-
-                    switch bottomPanelTab {
-                    case .console:
-                        ConsoleView(session: viewModel.currentSession)
-                    case .siri:
-                        SiriPreviewView(project: project)
-                    }
-                }
-                .frame(height: consoleHeight)
-                .transition(.move(edge: .bottom))
-            }
         }
-        .animation(.spring(duration: 0.25), value: isConsoleExpanded)
         .animation(.spring(duration: 0.2), value: viewModel.compileError != nil)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -113,13 +97,14 @@ struct EditorContainerView: View {
             }
 
             ToolbarItemGroup(placement: .topBarTrailing) {
-                // Console toggle with badge
+                // Expands the Console/Siri/Assistant sheet. The collapsed strip is always present
+                // as the tab bar accessory while an editor is open, so this only ever opens.
                 Button {
-                    isConsoleExpanded.toggle()
+                    panel.isExpanded.toggle()
                 } label: {
                     ZStack(alignment: .topTrailing) {
-                        Image(systemName: isConsoleExpanded ? "chevron.down.square.fill" : "chevron.up.square")
-                        if let count = viewModel.currentSession?.logs.count, count > 0, !isConsoleExpanded {
+                        Image(systemName: panel.isExpanded ? "chevron.down.square.fill" : "chevron.up.square")
+                        if let count = viewModel.currentSession?.logs.count, count > 0, !panel.isExpanded {
                             Text("\(min(count, 99))")
                                 .font(.system(size: 8, weight: .bold))
                                 .foregroundStyle(.white)
@@ -130,19 +115,10 @@ struct EditorContainerView: View {
                     }
                 }
 
-                // Widget preview button (only visible when project has widget.ts)
-                if hasWidget {
-                    Button {
-                        widgetPreviewRefreshToken = UUID()
-                        isWidgetPreviewShowing = true
-                    } label: {
-                        Image(systemName: "rectangle.on.rectangle")
-                    }
-                }
-
                 // Run button
                 Button {
-                    isConsoleExpanded = true
+                    panel.tab = .console
+                    panel.isExpanded = true
                     viewModel.run(project: project)
                 } label: {
                     if viewModel.isRunning {
@@ -158,9 +134,20 @@ struct EditorContainerView: View {
         .onAppear {
             presenter = ProjectFolderPresenter(folderURL: project.folderURL)
             loadProjectFiles()
+            panel.editorAppeared(project: project)
+            panel.consoleSession = viewModel.currentSession
+            if AssistantStore.shared.hasPendingPrompt(for: project.name) {
+                panel.tab = .assistant
+                panel.isExpanded = true
+            }
         }
         .onDisappear {
             presenter = nil
+            panel.editorDisappeared(project: project)
+        }
+        // The accessory strip lives outside this view, so it needs the live session pushed to it.
+        .onChange(of: viewModel.currentSession?.runId) { _, _ in
+            panel.consoleSession = viewModel.currentSession
         }
         .onReceive(
             NotificationCenter.default.publisher(for: .loomProjectFolderChanged)
@@ -172,18 +159,18 @@ struct EditorContainerView: View {
             reloadTrigger = UUID()
         }
         .onChange(of: viewModel.isRunning) { wasRunning, isRunning in
-            if wasRunning, !isRunning, hasWidget {
-                widgetPreviewRefreshToken = UUID()
+            if wasRunning, !isRunning {
+                panel.runFinished(project: project)
             }
         }
-        .sheet(isPresented: $isWidgetPreviewShowing) {
+        .sheet(item: $suggestions.docPage) { page in
             NavigationStack {
-                WidgetPreviewPanel(project: project, refreshToken: widgetPreviewRefreshToken)
-                    .navigationTitle("Widget Preview")
+                DocDetailView(page: page)
+                    .navigationTitle(page.title)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { isWidgetPreviewShowing = false }
+                            Button("Done") { suggestions.docPage = nil }
                         }
                     }
             }
@@ -224,7 +211,7 @@ struct EditorContainerView: View {
             includingPropertiesForKeys: nil
         ) else { return }
         let sorted = urls
-            .filter { $0.pathExtension == "ts" }
+            .filter { LoomProject.editableExtensions.contains($0.pathExtension.lowercased()) }
             .sorted {
                 if $0.lastPathComponent == "main.ts" { return true }
                 if $1.lastPathComponent == "main.ts" { return false }
@@ -237,8 +224,6 @@ struct EditorContainerView: View {
         }
     }
 }
-
-private enum BottomPanelTab { case console, siri }
 
 struct CompileErrorBanner: View {
     let error: CompileError

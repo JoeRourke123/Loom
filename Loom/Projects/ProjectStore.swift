@@ -1,3 +1,4 @@
+import AppIntents
 import Foundation
 import Observation
 
@@ -10,9 +11,7 @@ final class ProjectStore {
     private var metadataObservers: [NSObjectProtocol] = []
 
     init() {
-        containerURL = FileManager.default
-            .url(forUbiquityContainerIdentifier: "iCloud.uk.co.joerourke.Loom")?
-            .appendingPathComponent("Documents")
+        containerURL = LoomProjectResolver.containerURL
 
         if let url = containerURL {
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -29,22 +28,31 @@ final class ProjectStore {
 
     // MARK: - Public API
 
-    func createProject(name: String, template: ProjectTemplate? = nil) throws {
-        guard let containerURL else { return }
+    // Returns the new project so the caller can open it straight away. loadProjects() publishes
+    // `projects` asynchronously on the MainActor, so waiting for it to appear in that array
+    // would mean waiting a runloop turn for something already known here.
+    @discardableResult
+    func createProject(name: String, example: Example? = nil) throws -> LoomProject {
+        guard let containerURL else { throw ProjectScaffolder.ScaffoldError.noContainer }
         let folderURL = containerURL.appendingPathComponent(name)
         try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: false)
-        if let template {
-            try ProjectScaffolder.scaffold(into: folderURL, projectName: name, template: template)
+        if let example {
+            try ProjectScaffolder.scaffold(into: folderURL, projectName: name, example: example)
         } else {
             try ProjectScaffolder.scaffold(into: folderURL, projectName: name)
         }
         loadProjects()
+        return LoomProject(name: name, folderURL: folderURL)
     }
 
     func deleteProject(_ project: LoomProject) throws {
         var resultURL: NSURL?
         try FileManager.default.trashItem(at: project.folderURL, resultingItemURL: &resultURL)
         EntityIndexer.deleteAll(forProject: project.name)
+        // Cached remote modules live outside the project folder, so they'd otherwise outlive it.
+        // Rename deliberately doesn't move them — the next run just re-fetches, which is correct
+        // behaviour for a cache and not worth the code.
+        RemoteModuleCache.clear(projectNamed: project.name)
         loadProjects()
     }
 
@@ -77,6 +85,11 @@ final class ProjectStore {
         }
 
         updateAppGroupIndex(projects: loaded)
+
+        // Siri caches the entity values behind an App Shortcut phrase's parameter and only
+        // re-reads suggestedEntities() when told to. Without this, "Run <project> in Loom" has
+        // an empty project vocabulary and Siri matches no script names at all.
+        LoomShortcuts.updateAppShortcutParameters()
     }
 
     private func updateAppGroupIndex(projects: [LoomProject]) {

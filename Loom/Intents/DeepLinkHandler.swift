@@ -10,6 +10,8 @@ enum DeepLinkHandler {
         switch url.host {
         case "run":
             await handleRun(url)
+        case "widget":
+            await handleWidgetTap(url)
         case "share":
             await handleShare(url)
         default:
@@ -31,6 +33,11 @@ enum DeepLinkHandler {
             input[item.name] = item.value ?? ""
         }
 
+        // Opening a URL launches the app, but the scene isn't active yet — starting the run here
+        // means every Loom.ui.* call resolves to nothing while the run still reports success. Same
+        // race that made Shortcuts look broken; see ForegroundGate.
+        _ = await ForegroundGate.waitForActiveScene()
+
         let (status, result) = await ScriptRunner.shared.run(project: project, trigger: .urlScheme, input: input)
 
         switch status {
@@ -40,6 +47,44 @@ enum DeepLinkHandler {
             await notify(title: project.name, body: "Run failed: \(result ?? "unknown error")")
         case .running:
             break
+        }
+    }
+
+    // loom://widget?script=X[&button=key] — a widget body tap (widget: { runOnTap: true }) or a
+    // w.button({ runsScript: true }).
+    //
+    // Deliberately not handleRun with a different trigger. Two things differ: a `button` writes its
+    // KV timestamp before the run so Loom.kv.get(key) sees the tap *in that same run* rather than
+    // the next one, and success is silent — the user is watching the app open, and the script's own
+    // UI is the feedback. A "Run completed" notification on top of a presented sheet is noise.
+    // Failures still notify, since a script that dies before showing anything otherwise looks
+    // exactly like a tap that did nothing.
+    private static func handleWidgetTap(_ url: URL) async {
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func value(_ name: String) -> String? { items.first(where: { $0.name == name })?.value }
+
+        guard let scriptName = value("script"),
+              let project = LoomProjectResolver.project(named: scriptName)
+        else {
+            await notify(title: "Loom", body: "No project found for that widget.")
+            return
+        }
+
+        var input: [String: Any] = [:]
+        if let buttonKey = value("button"), !buttonKey.isEmpty {
+            // Same key scoping and ms-precision timestamp WidgetButtonIntent writes, so a script
+            // reads a runsScript button exactly like a plain one.
+            let store = NSUbiquitousKeyValueStore.default
+            store.set(Date().timeIntervalSince1970 * 1000, forKey: "\(project.name):\(buttonKey)")
+            store.synchronize()
+            input["button"] = buttonKey
+        }
+
+        _ = await ForegroundGate.waitForActiveScene()
+
+        let (status, result) = await ScriptRunner.shared.run(project: project, trigger: .widget, input: input)
+        if status == .error {
+            await notify(title: project.name, body: "Run failed: \(result ?? "unknown error")")
         }
     }
 

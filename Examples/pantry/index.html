@@ -1,0 +1,47 @@
+<!doctype html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pantry</title>
+
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    font: 17px/1.4 -apple-system, system-ui, sans-serif;
+    margin: 0; padding: 16px 16px 48px;
+    background: Canvas; color: CanvasText;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .hint { margin: 0 0 16px; font-size: 14px; color: color-mix(in srgb, CanvasText 55%, transparent); }
+
+  button {
+    font: inherit; font-weight: 590; padding: 10px 14px;
+    border: none; border-radius: 10px; background: AccentColor; color: white;
+  }
+  button.danger { background: color-mix(in srgb, red 75%, CanvasText); }
+  .scan { width: 100%; margin-bottom: 18px; }
+
+  .count, .empty { font-size: 14px; color: color-mix(in srgb, CanvasText 55%, transparent); }
+  .empty { padding: 28px 0; text-align: center; }
+
+  .row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 0 12px 12px;
+    border-top: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+    border-left: 4px solid transparent;
+  }
+  .row.fine { border-left-color: seagreen; }
+  .row.soon { border-left-color: orange; }
+  .row.gone { border-left-color: crimson; }
+  .row .name { margin: 0; font-weight: 590; }
+  .row .meta { margin: 2px 0 0; font-size: 13px; color: color-mix(in srgb, CanvasText 55%, transparent); }
+  .row .actions { display: flex; gap: 8px; flex: none; }
+  .row .actions button { font-size: 13px; padding: 7px 11px; }
+</style>
+
+<h1>Pantry</h1>
+<p class="hint">Scan a barcode to add something. Swipe down to close when you're done.</p>
+
+<!-- hx-post with no fields: the handler opens the camera, so the request is just a trigger. -->
+<button class="scan" hx-post="/scan" hx-target="#list" hx-indicator="this">Scan a barcode</button>
+
+<div id="list" hx-get="/items" hx-trigger="load"></div>

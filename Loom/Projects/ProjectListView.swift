@@ -2,17 +2,35 @@ import SwiftUI
 
 struct ProjectListView: View {
     @Environment(ProjectStore.self) private var projectStore
+    // Owns which editor is pushed, so creating a project can open it directly — including from
+    // the Examples tab, which is a different navigation branch entirely.
+    @State private var opener = ProjectOpenCoordinator.shared
     @State private var showingCreation = false
     @State private var projectToDelete: LoomProject?
     @State private var projectToRename: LoomProject?
     @State private var renameText = ""
 
     var body: some View {
-        List {
+        @Bindable var opener = opener
+        return List {
             ForEach(projectStore.projects) { project in
-                NavigationLink(value: project) {
-                    Label(project.name, systemImage: "doc.text")
+                // A Button driving navigationDestination(item:) rather than
+                // NavigationLink(value:) + navigationDestination(for:) — the stack is owned by
+                // AppNavigationView, so there's no path binding here to push onto
+                // programmatically. Same idiom as ExamplesView.
+                Button {
+                    opener.open(project)
+                } label: {
+                    HStack {
+                        Label(project.name, systemImage: "doc.text")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .contextMenu {
                     Button("Rename") {
                         projectToRename = project
@@ -26,7 +44,7 @@ struct ProjectListView: View {
             }
         }
         .navigationTitle("Projects")
-        .navigationDestination(for: LoomProject.self) { project in
+        .navigationDestination(item: $opener.project) { project in
             EditorContainerView(project: project)
         }
         .toolbar {

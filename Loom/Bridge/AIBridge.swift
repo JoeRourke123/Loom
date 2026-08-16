@@ -2,8 +2,12 @@ import Foundation
 import JavaScriptCore
 import FoundationModels
 
-// Implements Loom.ai.complete, .chat, .embed (stub), .search (LLM-ranked)
-// complete/chat: apple (on-device SystemLanguageModel), claude (Anthropic API), gemini (Google AI API)
+// Implements Loom.ai.complete, .chat, .search (LLM-ranked)
+// complete/chat: 'apple'/'auto'/omitted runs the on-device SystemLanguageModel. Any other
+// provider string names one the user configured in Settings, resolved through the shared
+// AIProviderStore and called via AIClient — the same credential store and wire implementation
+// the authoring assistant and inline completions use (ADR-015). Loom.ai owns no keys and no
+// HTTP of its own.
 // search: LLM-powered relevance ranking using Apple on-device model
 final class AIBridge {
     private let ctx: JSContext
@@ -17,7 +21,8 @@ final class AIBridge {
         let capturedCtx = ctx
 
         // complete(prompt, opts?) → Promise<string>
-        // opts: { provider: 'auto'|'apple'|'claude'|'gemini', maxTokens?, instructions? }
+        // opts: { provider?: 'apple' | <name of a provider configured in Settings>,
+        //         model?, maxTokens?, instructions? }
         let completeBlock: @convention(block) (JSValue, JSValue) -> JSValue = { [weak self] promptVal, optsVal in
             guard let self else { return JSValue(undefinedIn: capturedCtx) }
             let prompt = promptVal.toString() ?? ""
@@ -68,26 +73,25 @@ final class AIBridge {
     // MARK: - complete
 
     private func complete(prompt: String, opts: [String: Any]) async throws -> String {
-        switch resolvedProvider(opts["provider"] as? String ?? "auto") {
-        case .apple:  return try await appleComplete(prompt: prompt, opts: opts)
-        case .claude: return try await claudeComplete(prompt: prompt, opts: opts)
-        case .gemini: return try await geminiComplete(prompt: prompt, opts: opts)
+        guard let provider = try resolveProvider(opts) else {
+            // Deliberately passes the raw prompt, not the role-prefixed form chat() builds —
+            // a single-turn completion shouldn't be dressed up as a transcript.
+            return try await appleComplete(prompt: prompt, opts: opts)
         }
+        return try await remote(provider: provider, messages: [.init(role: .user, text: prompt)], opts: opts)
     }
 
     // MARK: - chat
 
     private func chat(messages: [[String: Any]], opts: [String: Any]) async throws -> String {
-        switch resolvedProvider(opts["provider"] as? String ?? "auto") {
-        case .apple:
+        guard let provider = try resolveProvider(opts) else {
             // Apple model is single-turn; concatenate history into a prompt
             let prompt = messages
                 .map { "\(((($0["role"] as? String) ?? "user")).capitalized): \($0["content"] as? String ?? "")" }
                 .joined(separator: "\n")
             return try await appleComplete(prompt: prompt, opts: opts)
-        case .claude: return try await claudeChat(messages: messages, opts: opts)
-        case .gemini: return try await geminiChat(messages: messages, opts: opts)
         }
+        return try await remote(provider: provider, messages: messages.map(Self.chatMessage), opts: opts)
     }
 
     // MARK: - search (LLM-ranked)
@@ -138,75 +142,57 @@ final class AIBridge {
         return response.content
     }
 
-    // MARK: - Claude (Anthropic API)
+    // MARK: - Configured providers
 
-    private func claudeComplete(prompt: String, opts: [String: Any]) async throws -> String {
-        try await claudeChat(messages: [["role": "user", "content": prompt]], opts: opts)
-    }
+    // AIClient streams; Loom.ai hands JS one string. Collecting it here is what lets Loom.ai and
+    // the authoring assistant share a single wire implementation instead of maintaining two —
+    // makePromise's semaphore simply waits a little longer.
+    private func remote(
+        provider: AIProvider, messages: [AIClient.ChatMessage], opts: [String: Any]
+    ) async throws -> String {
+        guard let apiKey = AIProviderStore.shared.apiKey(for: provider), !apiKey.isEmpty else {
+            throw AIError.missingKey(provider.name)
+        }
+        // Per-call overrides of the provider's configured defaults. The id is unchanged, so the
+        // Keychain lookup above still resolves.
+        var provider = provider
+        if let model = opts["model"] as? String, !model.isEmpty { provider.model = model }
+        if let maxTokens = opts["maxTokens"] as? Int { provider.maxTokens = maxTokens }
 
-    private func claudeChat(messages: [[String: Any]], opts: [String: Any]) async throws -> String {
-        guard let apiKey = KeychainManager.load(service: KeychainManager.claudeAPIKeyService), !apiKey.isEmpty else {
-            throw AIError.missingAPIKey("Claude")
+        var text = ""
+        for try await event in AIClient.stream(
+            provider: provider,
+            apiKey: apiKey,
+            system: opts["instructions"] as? String ?? "",
+            messages: messages,
+            tools: []
+        ) {
+            if case .text(let chunk) = event { text += chunk }
         }
-        let model = opts["model"] as? String ?? "claude-sonnet-4-6"
-        let maxTokens = opts["maxTokens"] as? Int ?? 1024
-        let body: [String: Any] = ["model": model, "max_tokens": maxTokens, "messages": messages]
-        let bodyData = try JSONSerialization.data(withJSONObject: body)
-        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        req.httpBody = bodyData
-        let (data, _) = try await URLSession.shared.data(for: req)
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = (json["content"] as? [[String: Any]])?.first?["text"] as? String else {
-            throw AIError.badResponse(String(data: data, encoding: .utf8) ?? "")
-        }
-        return content
-    }
-
-    // MARK: - Gemini (Google AI API)
-
-    private func geminiComplete(prompt: String, opts: [String: Any]) async throws -> String {
-        try await geminiChat(messages: [["role": "user", "content": prompt]], opts: opts)
-    }
-
-    private func geminiChat(messages: [[String: Any]], opts: [String: Any]) async throws -> String {
-        guard let apiKey = KeychainManager.load(service: KeychainManager.geminiAPIKeyService), !apiKey.isEmpty else {
-            throw AIError.missingAPIKey("Gemini")
-        }
-        let model = opts["model"] as? String ?? "gemini-2.0-flash"
-        let contents: [[String: Any]] = messages.map { m in
-            let role = (m["role"] as? String) == "assistant" ? "model" : "user"
-            return ["role": role, "parts": [["text": m["content"] as? String ?? ""]]]
-        }
-        let body: [String: Any] = ["contents": contents]
-        let bodyData = try JSONSerialization.data(withJSONObject: body)
-        let urlStr = "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)"
-        var req = URLRequest(url: URL(string: urlStr)!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = bodyData
-        let (data, _) = try await URLSession.shared.data(for: req)
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let parts = ((json["candidates"] as? [[String: Any]])?.first?["content"] as? [String: Any])?["parts"] as? [[String: Any]],
-              let content = parts.first?["text"] as? String else {
-            throw AIError.badResponse(String(data: data, encoding: .utf8) ?? "")
-        }
-        return content
+        return text
     }
 
     // MARK: - Helpers
 
-    private enum Provider { case apple, claude, gemini }
+    // nil means the on-device Apple model. Any other string names a provider the user configured
+    // in Settings, matched case-insensitively — 'claude' and 'gemini' are no longer reserved
+    // words, just the names the legacy-key migration happens to create (see AIProviderStore).
+    private func resolveProvider(_ opts: [String: Any]) throws -> AIProvider? {
+        let name = (opts["provider"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // Case-insensitive throughout, so 'Apple' doesn't fall through to a name lookup and throw.
+        if name.isEmpty || ["apple", "auto"].contains(name.lowercased()) { return nil }
+        guard let provider = AIProviderStore.shared.providers.first(
+            where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+        ) else { throw AIError.unknownProvider(name) }
+        return provider
+    }
 
-    private func resolvedProvider(_ p: String) -> Provider {
-        switch p {
-        case "claude": return .claude
-        case "gemini": return .gemini
-        default:       return .apple
-        }
+    private static func chatMessage(_ m: [String: Any]) -> AIClient.ChatMessage {
+        AIClient.ChatMessage(
+            role: (m["role"] as? String) == "assistant" ? .assistant : .user,
+            text: m["content"] as? String ?? ""
+        )
     }
 
     nonisolated private func makePromise(
@@ -235,14 +221,17 @@ final class AIBridge {
 
 private enum AIError: LocalizedError {
     case modelUnavailable
-    case missingAPIKey(String)
-    case badResponse(String)
+    case unknownProvider(String)
+    case missingKey(String)
 
     var errorDescription: String? {
         switch self {
-        case .modelUnavailable:      return "Apple on-device AI model is not available on this device"
-        case .missingAPIKey(let p):  return "\(p) API key not set — add it in Settings"
-        case .badResponse(let body): return "Unexpected API response: \(body.prefix(200))"
+        case .modelUnavailable:
+            return "Apple on-device AI model is not available on this device"
+        case .unknownProvider(let name):
+            return "No AI provider named \u{201c}\(name)\u{201d} — add one in Settings, or use \u{201c}apple\u{201d} for the on-device model"
+        case .missingKey(let name):
+            return "No API key stored for provider \u{201c}\(name)\u{201d} — set it in Settings"
         }
     }
 }

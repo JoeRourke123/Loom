@@ -1,6 +1,24 @@
 import Foundation
 import GRDB
 
+nonisolated struct LogStat: Identifiable, Hashable {
+    var key: String
+    var count: Int
+    var id: String { key }
+}
+
+nonisolated enum LogQueryResult {
+    case entries([LogEntry])
+    case stats([LogStat])
+
+    var count: Int {
+        switch self {
+        case .entries(let rows): return rows.count
+        case .stats(let rows):   return rows.count
+        }
+    }
+}
+
 actor LogStore {
     static let shared = LogStore()
     private var db: DatabasePool?
@@ -8,6 +26,13 @@ actor LogStore {
 
     nonisolated func append(_ entry: LogEntry) {
         Task { await _persist(entry) }
+    }
+
+    /// Awaitable variant. `append` hands off to a detached Task, so a caller that is about to be
+    /// killed — an App Intent over its execution budget — can lose the write it just made. Use
+    /// this where the entry existing is the whole point of writing it.
+    func persist(_ entry: LogEntry) async {
+        await _persist(entry)
     }
 
     private func _persist(_ entry: LogEntry) async {
@@ -51,6 +76,24 @@ actor LogStore {
         } catch {
             print("[LogStore] fetch error: \(error)")
             return []
+        }
+    }
+
+    /// Runs a parsed `LogQuery`. Either a page of entries or, when the query ends in `| stats`,
+    /// the aggregated counts.
+    func search(_ query: LogQuery, now: Date = Date()) async throws -> LogQueryResult {
+        let pool = try pool()
+        let (sql, args) = query.build(now: now)
+        return try await pool.read { db in
+            let statement = StatementArguments(args)
+            if query.stats == nil {
+                return .entries(try LogEntry.fetchAll(db, sql: sql, arguments: statement))
+            }
+            let rows = try Row.fetchAll(db, sql: sql, arguments: statement)
+            return .stats(rows.map {
+                // GROUP BY on a nullable column yields a NULL key — only reachable via `by data`.
+                LogStat(key: $0["key"] ?? "—", count: $0["count"] ?? 0)
+            })
         }
     }
 

@@ -1,0 +1,602 @@
+<title>Loom Icon System</title>
+<style>
+:root{
+  --linen:#F6F1E7; --paper:#FFFFFF;
+  --bg:#F6F1E7; --surface:#FDFBF6; --rule:#E1D7C4; --rule-soft:#EDE5D6;
+  --ink:#171235; --body:#3E3861; --muted:#6E6693;
+  --warp:#4A38C4; --weft:#B25C09; --wefthi:#CE6A11;
+  --swatch-dark:#14102F;
+  --sans:ui-sans-serif,-apple-system,"SF Pro Text","Helvetica Neue",sans-serif;
+  --serif:ui-serif,"New York","Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --pad:clamp(1.25rem,4vw,3.5rem);
+  --maxw:1180px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0D0A22; --surface:#151132; --rule:#2A2456; --rule-soft:#1E1943;
+    --ink:#F0EBFF; --body:#C6BEEC; --muted:#8E86BC;
+    --warp:#9B8CFF; --weft:#FFB43D; --wefthi:#FFC768;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D0A22; --surface:#151132; --rule:#2A2456; --rule-soft:#1E1943;
+  --ink:#F0EBFF; --body:#C6BEEC; --muted:#8E86BC;
+  --warp:#9B8CFF; --weft:#FFB43D; --wefthi:#FFC768;
+}
+:root[data-theme="light"]{
+  --bg:#F6F1E7; --surface:#FDFBF6; --rule:#E1D7C4; --rule-soft:#EDE5D6;
+  --ink:#171235; --body:#3E3861; --muted:#6E6693;
+  --warp:#4A38C4; --weft:#B25C09; --wefthi:#CE6A11;
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--body);
+  font:400 clamp(0.95rem,0.35vw + 0.88rem,1.02rem)/1.65 var(--sans);
+  -webkit-font-smoothing:antialiased;overflow-x:hidden}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--pad)}
+
+/* ── type ───────────────────────────────────────────────── */
+h1,h2,h3,h4{color:var(--ink);margin:0;text-wrap:balance;font-weight:600}
+h1{font-family:var(--serif);font-weight:500;letter-spacing:-.03em;line-height:1.02;
+   font-size:clamp(2.9rem,8.5vw,5.4rem)}
+h2{font-family:var(--serif);font-weight:500;letter-spacing:-.02em;line-height:1.1;
+   font-size:clamp(1.7rem,3.4vw,2.35rem)}
+h3{font-family:var(--serif);font-weight:500;letter-spacing:-.015em;font-size:1.32rem}
+.eyebrow{font:600 .69rem/1.4 var(--sans);letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin:0}
+.lede{font-size:clamp(1.05rem,1.6vw,1.22rem);line-height:1.6;color:var(--body);max-width:62ch}
+p{margin:0}
+.dim{color:var(--muted)}
+.measure{max-width:64ch}
+a{color:var(--warp)}
+
+/* equations — variables italic serif, functions and numerals roman */
+.eq{font-family:var(--serif);font-style:italic;font-size:1.04rem;line-height:1.5;
+  color:var(--ink);letter-spacing:.005em}
+.eq .rm{font-style:normal}
+
+/* ── masthead ───────────────────────────────────────────── */
+header{position:relative;padding:clamp(3rem,9vh,6rem) 0 clamp(2.5rem,6vh,4rem)}
+#plot{position:absolute;inset:0;width:100%;height:100%;z-index:0;
+  opacity:.5;pointer-events:none;
+  -webkit-mask-image:radial-gradient(115% 88% at 78% 42%,#000 12%,transparent 72%);
+  mask-image:radial-gradient(115% 88% at 78% 42%,#000 12%,transparent 72%)}
+header .wrap{position:relative;z-index:1}
+.masthead-meta{display:flex;flex-wrap:wrap;gap:.5rem 1.6rem;margin-top:2.2rem;
+  padding-top:1.1rem;border-top:1px solid var(--rule)}
+.masthead-meta span{font:500 .78rem/1.5 var(--sans);color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.masthead-meta b{color:var(--ink);font-weight:600}
+h1 em{font-style:italic;color:var(--weft)}
+
+/* ── sections ───────────────────────────────────────────── */
+section{padding:clamp(2.6rem,7vh,4.6rem) 0}
+.sec-head{display:grid;gap:.55rem;padding-bottom:1.6rem;margin-bottom:2rem;
+  border-bottom:1px solid var(--rule)}
+.sec-head .rowtop{display:flex;align-items:baseline;justify-content:space-between;gap:1rem}
+
+/* ── system: grid + palette + weights ───────────────────── */
+.sys{display:grid;grid-template-columns:minmax(0,1fr);gap:clamp(2rem,4vw,3rem)}
+@media (min-width:860px){.sys{grid-template-columns:minmax(0,380px) minmax(0,1fr)}}
+.gridfig{width:100%;height:auto;display:block}
+.gridfig text{font:400 34px var(--mono);fill:var(--muted)}
+.gridfig .lbl{fill:var(--warp)}
+
+.deflist{display:grid;gap:0;margin:0}
+.deflist div{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.2rem 1.4rem;
+  padding:.62rem 0;border-bottom:1px solid var(--rule-soft);align-items:baseline}
+.deflist dt{font:600 .8rem/1.4 var(--mono);color:var(--ink);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.deflist dd{margin:0;font-size:.88rem;color:var(--muted)}
+
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));
+  gap:.7rem;margin-top:.4rem}
+.sw{border:1px solid var(--rule);padding:.7rem .8rem .8rem;display:grid;gap:.28rem;
+  align-content:start}
+.sw i{display:block;height:44px;border-radius:3px}
+.sw b{font:600 .78rem/1.3 var(--sans);color:var(--ink)}
+.sw code{font:400 .7rem/1.3 var(--mono);color:var(--muted);text-transform:uppercase}
+.sw small{font:400 .7rem/1.35 var(--sans);color:var(--muted)}
+
+.weights{display:grid;gap:.55rem;margin-top:.4rem}
+.wt{display:grid;grid-template-columns:3.4rem minmax(0,1fr) 10.5rem;gap:1rem;
+  align-items:center;font:400 .78rem/1 var(--mono);color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.wt i{display:block;background:var(--warp);border-radius:99px}
+.wt em{font-style:normal;font:400 .74rem/1.3 var(--sans)}
+
+/* ── controls ───────────────────────────────────────────── */
+.controls{position:sticky;top:0;z-index:20;background:var(--bg);
+  border-bottom:1px solid var(--rule);
+  padding:.7rem 0;margin-bottom:0}
+.controls .wrap{display:flex;flex-wrap:wrap;gap:.9rem 1.4rem;align-items:center;
+  justify-content:space-between}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:99px;overflow:hidden}
+.seg button{appearance:none;border:0;background:transparent;cursor:pointer;
+  font:600 .76rem/1 var(--sans);letter-spacing:.02em;color:var(--muted);
+  padding:.52rem 1rem}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg button:focus-visible{outline:2px solid var(--warp);outline-offset:-2px}
+.controls label{font:600 .69rem/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);margin-right:.6rem}
+
+/* ── plates ─────────────────────────────────────────────── */
+.family{padding-top:clamp(2.2rem,5vh,3.4rem)}
+.family-head{display:grid;gap:.4rem;padding:1rem 0 1.4rem;
+  border-top:2px solid var(--ink);margin-bottom:1.8rem}
+.family-head p{max-width:56ch;font-size:.92rem;color:var(--muted)}
+
+.plates{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,236px),1fr));
+  gap:clamp(1.6rem,3vw,2.6rem)}
+.plate{display:grid;gap:.85rem;align-content:start}
+.plate .art{position:relative;border-radius:22.37%;overflow:hidden;
+  background:var(--rule-soft)}
+.plate .art img{width:100%;height:auto;display:block}
+.plate-title{display:flex;align-items:baseline;justify-content:space-between;gap:.7rem;
+  border-bottom:1px solid var(--rule);padding-bottom:.45rem}
+.plate-title h3{font-size:1.2rem}
+.plate-title .no{font:500 .72rem/1 var(--mono);color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.plate .note{font-size:.85rem;line-height:1.55;color:var(--muted)}
+.plate .eq{font-size:.95rem}
+
+.plate footer{display:flex;align-items:center;justify-content:space-between;gap:.8rem;
+  flex-wrap:wrap;padding-top:.7rem;border-top:1px solid var(--rule-soft)}
+.scales{display:flex;align-items:flex-end;gap:.55rem}
+.scales img{display:block;border-radius:22.37%}
+.scales img:nth-child(1){width:52px}
+.scales img:nth-child(2){width:34px}
+.scales img:nth-child(3){width:22px}
+.dl{display:flex;gap:.4rem}
+.dl button{appearance:none;cursor:pointer;background:transparent;color:var(--ink);
+  border:1px solid var(--rule);border-radius:99px;padding:.34rem .72rem;
+  font:600 .7rem/1 var(--sans);letter-spacing:.03em}
+.dl button:hover{border-color:var(--warp);color:var(--warp)}
+.dl button:focus-visible{outline:2px solid var(--warp);outline-offset:2px}
+
+/* ── modes strip ────────────────────────────────────────── */
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:1.2rem;margin-top:.4rem}
+.mode{display:grid;gap:.6rem;justify-items:start}
+.mode img{width:100%;max-width:170px;height:auto;border-radius:22.37%;display:block}
+.mode b{font:600 .82rem/1.3 var(--sans);color:var(--ink)}
+.mode small{font-size:.78rem;color:var(--muted);line-height:1.45}
+.onblack{background:#000;padding:0;border-radius:22.37%}
+
+/* ── usage ──────────────────────────────────────────────── */
+.cols{display:grid;gap:clamp(1.6rem,3vw,2.6rem);
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr))}
+.cols h4{font:600 .69rem/1.4 var(--sans);letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:.7rem;padding-bottom:.5rem;
+  border-bottom:1px solid var(--rule)}
+.cols ul{margin:0;padding-left:1.05rem;display:grid;gap:.5rem;font-size:.88rem}
+.cols li::marker{color:var(--warp)}
+.cols code{font:400 .82em var(--mono);color:var(--ink);
+  background:var(--rule-soft);padding:.08em .34em;border-radius:3px}
+.tree{font:400 .78rem/1.75 var(--mono);color:var(--muted);white-space:pre;
+  overflow-x:auto;display:block}
+.tree b{color:var(--ink);font-weight:400}
+
+footer.site{border-top:1px solid var(--rule);padding:2rem 0 3.4rem;margin-top:2rem;
+  font-size:.82rem;color:var(--muted)}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header>
+  <canvas id="plot" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <p class="eyebrow">Loom · Icon System · v1</p>
+    <h1>Eighteen marks,<br>no <em>freehand</em>.</h1>
+    <p class="lede" style="margin-top:1.4rem">
+      Loom weaves scripts into tools. So every icon here is woven too — each one is a
+      plot of a stated equation, drawn on one grid, in one palette, under one rule:
+      cool threads hold the structure, a warm thread does the work.
+      Pick one. They are all yours.
+    </p>
+    <div class="masthead-meta">
+      <span><b>18</b> marks</span>
+      <span><b>5</b> families</span>
+      <span><b>3</b> appearance variants</span>
+      <span><b>1024</b> px canvas</span>
+      <span>iOS 26 / 27 · Icon Composer ready</span>
+    </div>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="wrap">
+    <div>
+      <label for="seg-variant">Variant</label>
+      <span class="seg" id="seg-variant" role="group" aria-label="Icon variant">
+        <button data-v="dark" aria-pressed="true">Default</button>
+        <button data-v="light" aria-pressed="false">Light</button>
+        <button data-v="mono" aria-pressed="false">Mono</button>
+      </span>
+    </div>
+    <p class="dim" style="font-size:.8rem;margin:0">
+      Buttons on each plate download the variant selected here.
+    </p>
+  </div>
+</div>
+
+<section id="system">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="rowtop"><h2>The system</h2><p class="eyebrow">One grid · one palette</p></div>
+      <p class="measure dim">Every keyline is derived from the 1024&nbsp;px canvas by a power
+        of φ, so the whole set has a single number in it. Nothing is nudged by eye.</p>
+    </div>
+
+    <div class="sys">
+      <div>
+        <svg class="gridfig" viewBox="-8 -8 1040 1120" role="img"
+             aria-label="Icon grid: 1024 canvas, 92 margin, 840 live area, 420 keyline circle">
+          <rect x="0" y="0" width="1024" height="1024" fill="none"
+                stroke="var(--rule)" stroke-width="3"/>
+          <path id="sqfig" fill="none" stroke="var(--ink)" stroke-width="5"/>
+          <rect x="92" y="92" width="840" height="840" fill="none"
+                stroke="var(--warp)" stroke-width="3" stroke-dasharray="14 12"/>
+          <circle cx="512" cy="512" r="420" fill="none"
+                  stroke="var(--warp)" stroke-width="3" stroke-dasharray="14 12"/>
+          <line x1="512" y1="0" x2="512" y2="1024" stroke="var(--rule)" stroke-width="2"/>
+          <line x1="0" y1="512" x2="1024" y2="512" stroke="var(--rule)" stroke-width="2"/>
+          <line x1="0" y1="1064" x2="92" y2="1064" stroke="var(--warp)" stroke-width="4"/>
+          <line x1="92" y1="1064" x2="932" y2="1064" stroke="var(--ink)" stroke-width="4"/>
+          <line x1="932" y1="1064" x2="1024" y2="1064" stroke="var(--warp)" stroke-width="4"/>
+          <text class="lbl" x="0" y="1112">92</text>
+          <text x="512" y="1112" text-anchor="middle">840</text>
+          <text class="lbl" x="1024" y="1112" text-anchor="end">92</text>
+        </svg>
+      </div>
+
+      <div>
+        <dl class="deflist">
+          <div><dt>C = 1024</dt><dd>Canvas. Apple's icon square.</dd></div>
+          <div><dt>M = C / φ⁵ = 92</dt><dd>Margin. Content keeps clear of the Liquid Glass mask.</dd></div>
+          <div><dt>L = C − 2M = 840</dt><dd>Live area. Where a mark is allowed to live.</dd></div>
+          <div><dt>K = L / 2 = 420</dt><dd>Keyline circle. Round marks are cut to it.</dd></div>
+          <div><dt>U = C / 64 = 16</dt><dd>Base unit. Every stroke weight is a multiple.</dd></div>
+          <div><dt>|2x/C|⁵ + |2y/C|⁵ = 1</dt><dd>The mask. A Lamé superellipse; Apple's shipping
+            template measures at k ≈ 5.2, so k = 5 is inside a tenth of a percent.</dd></div>
+        </dl>
+
+        <h4 class="eyebrow" style="margin:2.2rem 0 .7rem">Palette · warp and weft</h4>
+        <p class="dim measure" style="font-size:.88rem;margin-bottom:.9rem">
+          On a loom the warp is fixed and the weft is the thread that travels. The palette
+          keeps that division: cool holds the structure, warm does the work. No icon uses a
+          third accent unless the equation itself has three parts.</p>
+        <div class="swatches" id="swatches"></div>
+
+        <h4 class="eyebrow" style="margin:2.2rem 0 .7rem">Stroke scale</h4>
+        <div class="weights" id="weights"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="modes">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="rowtop"><h2>Appearance</h2><p class="eyebrow">Six modes, one silhouette</p></div>
+      <p class="measure dim">iOS 26 renders an icon in Default, Dark, Clear Light, Clear Dark,
+        Tinted Light and Tinted Dark. Icon Composer derives all six from three source layers.
+        The silhouette must survive every one, which is why the meaning is always carried by
+        the form and never by the colour.</p>
+    </div>
+    <div class="modes" id="modes-strip"></div>
+  </div>
+</section>
+
+<section id="catalogue">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="rowtop"><h2>The plates</h2><p class="eyebrow">18 marks · 5 families</p></div>
+      <p class="measure dim">Each plate names the equation it plots. If the equation changes,
+        the mark changes — that is the whole discipline. Small previews are 52, 34 and 22&nbsp;px
+        so you can judge what survives a home screen before you commit.</p>
+    </div>
+    <div id="families"></div>
+  </div>
+</section>
+
+<section id="using">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="rowtop"><h2>Using these</h2><p class="eyebrow">Icon Composer · files · caveats</p></div>
+    </div>
+    <div class="cols">
+      <div>
+        <h4>Into Icon Composer</h4>
+        <ul>
+          <li>Open Icon Composer (ships with Xcode 26) and make a new document.</li>
+          <li>Drag <code>layers/&lt;name&gt;-bg.svg</code> into the background group,
+              <code>-mid.svg</code> into the mid-ground, <code>-fg.svg</code> into the foreground.</li>
+          <li>Leave shadow, highlight and blur off. The system lights the icon at
+              runtime; anything baked in will fight it.</li>
+          <li>Check all six appearances, then export a single <code>.icon</code> into
+              <code>Loom/Assets.xcassets</code>.</li>
+        </ul>
+      </div>
+      <div>
+        <h4>What's in the download</h4>
+        <span class="tree"><b>Design/Icons/</b>
+  &lt;name&gt;.svg          default
+  &lt;name&gt;-light.svg    linen ground
+  &lt;name&gt;-mono.svg     white on black
+  <b>layers/</b>
+    &lt;name&gt;-bg.svg     background
+    &lt;name&gt;-mid.svg    structure
+    &lt;name&gt;-fg.svg     hero mark
+  icons.json          manifest
+<b>Design/make_icons.py</b>  the generator</span>
+      </div>
+      <div>
+        <h4>Honest caveats</h4>
+        <ul>
+          <li><b>Harmonograph</b>, <b>chladni</b> and <b>two-source</b> are gorgeous at
+              1024 and turn to mush at 40. Use them for marketing, not the home screen.</li>
+          <li><b>Moiré</b> is a real interference pattern, which means it will alias on
+              some displays. That is the honest behaviour of the thing, but test it.</li>
+          <li>The default variant carries a background gradient. Icon Composer supports
+              gradient backgrounds, but if you want a flat ground, take the top stop
+              from the palette above.</li>
+          <li>Mono is authored the way the Clear and Tinted modes read it: white is
+              opaque, black is transparent.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="site">
+  <div class="wrap">
+    Regenerate any time with <code style="font-family:var(--mono)">python3 Design/make_icons.py</code>.
+    Change a constant, get a different icon — the file is the design system, not a record of it.
+  </div>
+</footer>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function(){
+"use strict";
+var D = JSON.parse(document.getElementById("data").textContent);
+var VARIANTS = ["dark","light","mono"];
+var variant = "dark";
+
+function uri(svg){ return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg))); }
+function el(tag, cls, html){ var e=document.createElement(tag); if(cls)e.className=cls;
+  if(html!=null)e.innerHTML=html; return e; }
+
+/* Variables stay italic; function names and numerals go roman. */
+function setEq(node, eq){
+  var s = eq.replace(/[&<>]/g, function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];});
+  s = s.replace(/\b(sin|cos|tan|exp|log|mod|over|punched)\b/g,'<span class="rm">$1</span>');
+  s = s.replace(/(\d+(?:\.\d+)?)/g,'<span class="rm">$1</span>');
+  node.innerHTML = s;
+}
+
+/* ── the squircle, drawn from the same equation the icons are masked with ── */
+(function(){
+  var pts=[], a=512, k=5, i, th, c, s;
+  for(i=0;i<160;i++){
+    th = 2*Math.PI*i/160; c=Math.cos(th); s=Math.sin(th);
+    pts.push([a + a*Math.sign(c)*Math.pow(Math.abs(c),2/k),
+              a + a*Math.sign(s)*Math.pow(Math.abs(s),2/k)]);
+  }
+  document.getElementById("sqfig").setAttribute("d",
+    "M"+pts.map(function(p){return p[0].toFixed(1)+","+p[1].toFixed(1);}).join("L")+"Z");
+})();
+
+/* ── palette ─────────────────────────────────────────────── */
+(function(){
+  var roles = [
+    ["bg0","Ground, top","Background gradient start"],
+    ["bg1","Ground, base","Background gradient end"],
+    ["warp","Warp","Structure. The fixed threads."],
+    ["warp2","Warp, dim","Rails, keylines, everything behind."],
+    ["weft","Weft","The shuttle. Whatever is doing the work."],
+    ["weft2","Weft, deep","Second warm step when a curve needs range."],
+    ["glow","Highlight","Nodes and light through a hole."],
+    ["cyan","Third thread","Only where the equation has three parts."]
+  ];
+  var box = document.getElementById("swatches");
+  roles.forEach(function(r){
+    var hex = D.palette.dark[r[0]];
+    var sw = el("div","sw");
+    var chip = el("i"); chip.style.background = hex; sw.appendChild(chip);
+    sw.appendChild(el("b",null,r[1]));
+    sw.appendChild(el("code",null,hex));
+    sw.appendChild(el("small",null,r[2]));
+    box.appendChild(sw);
+  });
+})();
+
+/* ── stroke scale ────────────────────────────────────────── */
+(function(){
+  var box = document.getElementById("weights");
+  [["16","U","keylines, envelopes"],["26","1.6U","secondary curve"],
+   ["48","3U","primary curve"],["84","5.25U","cord, knot, ribbon"],
+   ["180","11.25U","woven band"]].forEach(function(w){
+    var row = el("div","wt");
+    row.appendChild(el("span",null,w[0]+"px"));
+    var bar = el("i");
+    bar.style.height = Math.max(2, parseInt(w[0],10) * 0.22) + "px";
+    row.appendChild(bar);
+    row.appendChild(el("em",null,w[2]));
+    box.appendChild(row);
+  });
+})();
+
+/* ── appearance strip ────────────────────────────────────── */
+(function(){
+  var hero = D.icons.filter(function(i){return i.slug==="plain-weave";})[0];
+  var defs = [
+    ["dark","Default","Full colour on the indigo ground."],
+    ["light","Light","Linen ground for the light-appearance build."],
+    ["mono","Mono","White on black. Clear and Tinted read this as opacity."]
+  ];
+  var box = document.getElementById("modes-strip");
+  defs.forEach(function(d){
+    var m = el("div","mode");
+    var img = new Image(); img.src = uri(hero[d[0]]); img.alt = d[1] + " appearance";
+    if(d[0]==="mono") img.className = "onblack";
+    m.appendChild(img);
+    m.appendChild(el("b",null,d[1]));
+    m.appendChild(el("small",null,d[2]));
+    box.appendChild(m);
+  });
+})();
+
+/* ── plates ──────────────────────────────────────────────── */
+var imgIndex = [];   // {slug, nodes:[], }
+(function(){
+  var host = document.getElementById("families");
+  var order = Object.keys(D.families);
+  var no = 0;
+  order.forEach(function(fam){
+    var sec = el("div","family");
+    var head = el("div","family-head");
+    head.appendChild(el("p","eyebrow",fam));
+    head.appendChild(el("p",null,D.families[fam]));
+    sec.appendChild(head);
+
+    var grid = el("div","plates");
+    D.icons.filter(function(i){return i.family===fam;}).forEach(function(ic){
+      no++;
+      var plate = el("div","plate");
+
+      var art = el("div","art");
+      var big = new Image(); big.alt = ic.title + " icon"; art.appendChild(big);
+      plate.appendChild(art);
+
+      var t = el("div","plate-title");
+      t.appendChild(el("h3",null,ic.title));
+      t.appendChild(el("span","no",("0"+no).slice(-2)));
+      plate.appendChild(t);
+
+      var eq = el("p","eq"); setEq(eq, ic.eq); plate.appendChild(eq);
+      plate.appendChild(el("p","note",ic.note));
+
+      var foot = el("footer");
+      var scales = el("div","scales");
+      var s1=new Image(), s2=new Image(), s3=new Image();
+      [s1,s2,s3].forEach(function(s){ s.alt=""; s.setAttribute("aria-hidden","true");
+        scales.appendChild(s); });
+      foot.appendChild(scales);
+
+      var dl = el("div","dl");
+      var bSvg = el("button",null,"SVG"), bPng = el("button",null,"PNG");
+      bSvg.title = "Download the SVG"; bPng.title = "Download a 1024 px PNG";
+      bSvg.addEventListener("click",function(){ saveSvg(ic); });
+      bPng.addEventListener("click",function(){ savePng(ic); });
+      dl.appendChild(bSvg); dl.appendChild(bPng);
+      foot.appendChild(dl);
+      plate.appendChild(foot);
+
+      grid.appendChild(plate);
+      imgIndex.push({ic:ic, nodes:[big,s1,s2,s3], art:art});
+    });
+    sec.appendChild(grid);
+    host.appendChild(sec);
+  });
+})();
+
+function paint(){
+  imgIndex.forEach(function(r){
+    var u = uri(r.ic[variant]);
+    r.nodes.forEach(function(n){ n.src = u; });
+    r.art.style.background = variant === "mono" ? "#000" : "transparent";
+  });
+}
+paint();
+
+/* ── variant control ─────────────────────────────────────── */
+document.getElementById("seg-variant").addEventListener("click", function(e){
+  var b = e.target.closest("button"); if(!b) return;
+  variant = b.dataset.v;
+  [].forEach.call(this.querySelectorAll("button"), function(x){
+    x.setAttribute("aria-pressed", String(x === b));
+  });
+  paint();
+});
+
+/* ── downloads ───────────────────────────────────────────── */
+function grab(blob, name){
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+}
+function suffix(){ return variant === "dark" ? "" : "-" + variant; }
+function saveSvg(ic){
+  grab(new Blob([ic[variant]], {type:"image/svg+xml"}), "loom-" + ic.slug + suffix() + ".svg");
+}
+function savePng(ic){
+  var img = new Image();
+  img.onload = function(){
+    var c = document.createElement("canvas"); c.width = c.height = 1024;
+    var g = c.getContext("2d");
+    g.drawImage(img, 0, 0, 1024, 1024);
+    c.toBlob(function(b){ grab(b, "loom-" + ic.slug + suffix() + "@1024.png"); }, "image/png");
+  };
+  img.src = uri(ic[variant]);
+}
+
+/* ── masthead: a harmonograph, plotted live ──────────────── */
+(function(){
+  var cv = document.getElementById("plot");
+  if(!cv) return;
+  var g = cv.getContext("2d"), pts = [], W = 0, H = 0;
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function build(){
+    var box = cv.parentNode.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = box.width; H = box.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // same equation as the harmonograph plate, sized to the masthead
+    var A = Math.min(W, H) * 0.46, T = 42, d = 0.8 / T;
+    var fx = 2 + 2 * Math.PI / T, fy = 3, cx = W * 0.76, cy = H * 0.46;
+    pts = [];
+    for(var i = 0; i <= 2600; i++){
+      var t = T * i / 2600, e = A * Math.exp(-d * t);
+      pts.push([cx + e * Math.sin(fx * t + Math.PI / 4), cy + e * Math.sin(fy * t)]);
+    }
+  }
+
+  function draw(upto){
+    g.clearRect(0, 0, W, H);
+    var css = getComputedStyle(document.documentElement);
+    g.strokeStyle = css.getPropertyValue("--weft").trim() || "#FFB43D";
+    g.lineWidth = 1.15; g.lineJoin = "round"; g.lineCap = "round";
+    g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+    for(var i = 1; i < upto; i++) g.lineTo(pts[i][0], pts[i][1]);
+    g.stroke();
+  }
+
+  var frame = 0, raf = 0;
+  function tick(){
+    frame += 34;
+    draw(Math.min(frame, pts.length));
+    if(frame < pts.length) raf = requestAnimationFrame(tick);
+  }
+  function start(){
+    cancelAnimationFrame(raf);
+    build();
+    if(reduce){ draw(pts.length); } else { frame = 0; tick(); }
+  }
+  start();
+  var rt;
+  window.addEventListener("resize", function(){
+    clearTimeout(rt); rt = setTimeout(function(){ build(); draw(pts.length); }, 180);
+  });
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function(){
+    draw(pts.length);
+  });
+})();
+})();
+</script>

@@ -1,25 +1,25 @@
 import SwiftUI
 
-// In-app preview panel for widget.ts output.
-// Reads WidgetResult from the App Group after each run and renders each exported size
-// via WidgetView inside a device frame at the correct WidgetKit dimensions.
+// In-app preview for the `widget` export in main.ts, shown as the fourth tab of the editor's
+// bottom panel. Reads WidgetResult from the App Group after each run.
+//
+// The tree renders at true WidgetKit point dimensions and is then scaled down as a whole to fit
+// whatever space the sheet gives it. Laying out into a smaller frame instead would re-flow text
+// and change line breaks, so the preview would stop matching the home screen — the one thing it
+// exists to show.
 struct WidgetPreviewPanel: View {
     let project: LoomProject
 
     @State private var result: WidgetResult?
     @State private var selectedSize: PreviewSize = .small
-    // Bumped by EditorContainerView after each completed run to trigger a re-read.
+    // Bumped by EditorPanelCoordinator after each completed run to trigger a re-read.
     var refreshToken: UUID
 
     var body: some View {
         VStack(spacing: 0) {
             if let result, hasAnySize(result) {
+                stage(result)
                 sizePicker(result)
-                    .padding(.horizontal)
-                    .padding(.top, 12)
-                widgetPreview(result)
-                    .padding()
-                Spacer()
             } else {
                 emptyState
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -31,6 +31,35 @@ struct WidgetPreviewPanel: View {
     // MARK: - Sub-views
 
     @ViewBuilder
+    private func stage(_ result: WidgetResult) -> some View {
+        GeometryReader { geo in
+            Group {
+                if let node = node(for: selectedSize, in: result) {
+                    let scale = fitScale(in: geo.size)
+                    // projectName is deliberately left empty: that's WidgetView's switch for
+                    // static rendering. Passing the real name makes preview buttons and toggles
+                    // fire their intents, which write to the live KV store.
+                    WidgetView(node: node)
+                        .frame(width: selectedSize.width, height: selectedSize.height)
+                        .background(widgetContainerBackground(from: node))
+                        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                                .strokeBorder(.separator, lineWidth: 0.5)
+                        )
+                        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+                        .scaleEffect(scale)
+                        .frame(width: selectedSize.width * scale, height: selectedSize.height * scale)
+                } else {
+                    notAvailableView
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .padding(20)
+    }
+
+    @ViewBuilder
     private func sizePicker(_ result: WidgetResult) -> some View {
         let available = availableSizes(result)
         if available.count > 1 {
@@ -40,26 +69,8 @@ struct WidgetPreviewPanel: View {
                 }
             }
             .pickerStyle(.segmented)
-        }
-    }
-
-    @ViewBuilder
-    private func widgetPreview(_ result: WidgetResult) -> some View {
-        let node = node(for: selectedSize, in: result)
-        if let node {
-            ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                WidgetView(node: node, projectName: project.name)
-                    .frame(width: selectedSize.width, height: selectedSize.height)
-                    .clipShape(RoundedRectangle(cornerRadius: 22))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 22)
-                            .strokeBorder(.separator, lineWidth: 0.5)
-                    )
-                    .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-                    .padding(8)
-            }
-        } else {
-            notAvailableView
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
         }
     }
 
@@ -71,7 +82,7 @@ struct WidgetPreviewPanel: View {
             Text("Run the script to see a preview")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("widget.ts output appears here after each run")
+            Text("Export a `widget` function from main.ts and its output appears here after each run")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -83,15 +94,25 @@ struct WidgetPreviewPanel: View {
         VStack(spacing: 6) {
             Image(systemName: "nosign")
                 .foregroundStyle(.tertiary)
-            Text("Size not exported")
+            Text("No tree for this size")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(width: selectedSize.width, height: selectedSize.height)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 22))
+        .padding(24)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
     }
 
     // MARK: - Helpers
+
+    // Roughly the home-screen widget corner radius on iPhone. The real thing is
+    // ContainerRelativeShape, which only resolves inside a widget context.
+    private static let cornerRadius: CGFloat = 24
+
+    // Never scales up — a small widget stays 1:1 rather than being blown up to fill the sheet.
+    private func fitScale(in available: CGSize) -> CGFloat {
+        guard available.width > 0, available.height > 0 else { return 1 }
+        return min(1, min(available.width / selectedSize.width, available.height / selectedSize.height))
+    }
 
     private func reload() {
         result = WidgetResult.fromAppGroup(projectName: project.name)

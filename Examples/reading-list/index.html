@@ -1,0 +1,67 @@
+<!doctype html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reading List</title>
+
+<!--
+  Static assets are not served, so all styling is inline. Loom injects htmx itself — do not add a
+  script tag or a CDN link for it.
+-->
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    font: 17px/1.45 -apple-system, system-ui, sans-serif;
+    margin: 0; padding: 16px 16px 48px;
+    background: Canvas; color: CanvasText;
+  }
+  h1 { font-size: 22px; margin: 0 0 14px; }
+
+  form.add { display: flex; gap: 8px; margin-bottom: 12px; }
+  form.search { display: flex; gap: 8px; margin-bottom: 18px; }
+  input, select, button {
+    font: inherit; padding: 9px 11px; border-radius: 10px;
+    border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+    background: Canvas; color: CanvasText;
+  }
+  input { flex: 1; min-width: 0; }
+  button { background: AccentColor; color: white; border: none; font-weight: 590; }
+  button.danger { background: color-mix(in srgb, red 80%, CanvasText); }
+
+  .count, .empty { color: color-mix(in srgb, CanvasText 55%, transparent); font-size: 14px; }
+  .empty { padding: 28px 0; text-align: center; }
+
+  .card {
+    display: flex; gap: 12px; padding: 12px 0;
+    border-top: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+  }
+  .card.read { opacity: 0.45; }
+  .card img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; flex: none; }
+  .card .body { min-width: 0; flex: 1; }
+  .card .title { font-weight: 590; text-decoration: none; color: CanvasText; display: block; }
+  .card .host { margin: 2px 0 0; font-size: 13px; color: color-mix(in srgb, CanvasText 50%, transparent); }
+  .card .excerpt { margin-top: 5px; font-size: 14px; color: color-mix(in srgb, CanvasText 70%, transparent); }
+  .card .actions { display: flex; gap: 8px; margin-top: 9px; }
+  .card .actions button { font-size: 13px; padding: 6px 10px; }
+</style>
+
+<h1>Reading List</h1>
+
+<form class="add" hx-post="/add" hx-target="#list" hx-on::after-request="this.reset()">
+  <input name="url" type="url" placeholder="Paste a link" required>
+  <button>Add</button>
+</form>
+
+<form class="search" hx-post="/search" hx-target="#list" hx-trigger="submit, change from:select">
+  <input name="q" type="search" placeholder="Search">
+  <select name="mode">
+    <option value="fuzzy">By name</option>
+    <option value="smart">By meaning</option>
+  </select>
+  <button>Go</button>
+</form>
+
+<!--
+  Nothing is rendered into the page by Loom. The list asks for itself on load, and every action
+  swaps a fresh fragment back into this one element.
+-->
+<div id="list" hx-get="/items" hx-trigger="load"></div>

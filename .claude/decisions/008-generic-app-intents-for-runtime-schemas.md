@@ -1,6 +1,12 @@
 # ADR-008: Generic compile-time App Intents/Entities for runtime-defined project schemas
 Date: 2026-08-01
-Status: accepted
+Status: accepted; the rich intent's slot mechanism superseded by [ADR-020](020-dictionary-intent-input.md) (2026-08-10)
+
+> **Amendment (2026-08-10).** The core decision below still holds — one compile-time Swift type
+> covers every project's runtime schema, and that is still permanent. What changed is *how* the
+> rich intent carries values: the bounded slot pool described in the Decision section was replaced
+> by a single dictionary parameter. The 4/2/2/1 ceiling and `IntentSlotMapping.swift` no longer
+> exist. `LoomDataEntity` is untouched. See ADR-020.
 
 ## Context
 

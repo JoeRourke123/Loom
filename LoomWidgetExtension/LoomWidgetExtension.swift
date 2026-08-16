@@ -50,10 +50,21 @@ struct LoomWidgetEntryView: View {
         if let node = nodeForFamily() {
             WidgetView(node: node, projectName: entry.projectName)
                 .containerBackground(widgetContainerBackground(from: node), for: .widget)
+                // Only when the project opted in via widget: { runOnTap: true }. Without it the
+                // modifier is absent entirely, so a tap keeps today's behaviour of opening Loom
+                // wherever it was. A Link inside the tree still wins for its own area, which is
+                // what lets a runsScript button and a run-on-tap body coexist.
+                .widgetURL(tapURL)
         } else {
             placeholderView
                 .containerBackground(.fill.tertiary, for: .widget)
         }
+    }
+
+    // nil leaves .widgetURL unset, which is not the same as setting it to nothing.
+    private var tapURL: URL? {
+        guard entry.widgetResult?.runOnTap == true, !entry.projectName.isEmpty else { return nil }
+        return WidgetResult.tapURL(projectName: entry.projectName)
     }
 
     private func nodeForFamily() -> WidgetNode? {

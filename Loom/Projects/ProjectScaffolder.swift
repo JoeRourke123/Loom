@@ -16,46 +16,47 @@ export default loom(async (ctx) => {
         try mainTS.write(to: mainURL, atomically: true, encoding: .utf8)
     }
 
-    static func widgetTemplate(projectName: String) -> String {
-        """
-import { w } from '@loom/widget';
-
-export const small = (ctx) => w.vstack([
-  w.text('\(projectName)', { font: 'headline' }),
-  w.text('Small widget', { font: 'caption', color: 'secondary' }),
-]);
-
-export const medium = (ctx) => w.hstack([
-  w.icon('bolt.fill', { color: 'accent', size: 28 }),
-  w.vstack([
-    w.text('\(projectName)', { font: 'title3' }),
-    w.text('Medium widget', { font: 'caption', color: 'secondary' }),
-  ]),
-]);
-"""
-    }
-
     static func emptyTemplate(fileName: String) -> String {
         "// \(fileName)\n"
     }
 
-    static func scaffold(into folderURL: URL, projectName: String, template: ProjectTemplate) throws {
-        let mainURL = folderURL.appendingPathComponent("main.ts")
-        try template.mainTS.write(to: mainURL, atomically: true, encoding: .utf8)
-        let widgetURL = folderURL.appendingPathComponent("widget.ts")
-        try template.widgetTS.write(to: widgetURL, atomically: true, encoding: .utf8)
+    /// Copies an example's bundled files into a new project folder.
+    ///
+    /// Files ship as `<slug>.<destination>` because app resources flatten to the bundle root (see
+    /// ADR-019 / DocPage.swift); this is where the prefix comes back off. Read-and-write rather
+    /// than copyItem, matching the blank scaffold above — it leaves app-owned files in the iCloud
+    /// container and doesn't inherit the bundle's read-only permissions.
+    ///
+    /// Deliberately no name substitution: each example's `loom()` config carries its own `name:`,
+    /// and rewriting it would mean parsing the config we specifically avoid parsing.
+    static func scaffold(into folderURL: URL, projectName: String, example: Example) throws {
+        for file in example.files {
+            guard let url = example.bundleURL(for: file) else {
+                throw ScaffoldError.missingResource("\(example.slug).\(file)")
+            }
+            let contents = try String(contentsOf: url, encoding: .utf8)
+            try contents.write(to: folderURL.appendingPathComponent(file), atomically: true, encoding: .utf8)
+        }
+    }
+
+    enum ScaffoldError: LocalizedError {
+        case missingResource(String)
+        case noContainer
+
+        var errorDescription: String? {
+            switch self {
+            case .missingResource(let name):
+                return "Example file \"\(name)\" is missing from the app bundle."
+            case .noContainer:
+                return "Loom can't reach its iCloud Drive folder. Check that iCloud Drive is on for Loom in Settings."
+            }
+        }
     }
 
     @discardableResult
     static func createFile(named name: String, in project: LoomProject) throws -> URL {
         let url = project.folderURL.appendingPathComponent(name)
-        let content: String
-        if name == "widget.ts" {
-            content = widgetTemplate(projectName: project.name)
-        } else {
-            content = emptyTemplate(fileName: name)
-        }
-        try content.write(to: url, atomically: true, encoding: .utf8)
+        try emptyTemplate(fileName: name).write(to: url, atomically: true, encoding: .utf8)
         return url
     }
 }

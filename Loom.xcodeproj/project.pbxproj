@@ -8,11 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		AA000001AA000001AA000001 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = AA000002AA000002AA000002 /* GRDB */; };
+		BB000001BB000001BB000001 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB000002BB000002BB000002 /* MarkdownUI */; };
 		D88B75A62FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone in Frameworks */ = {isa = PBXBuildFile; productRef = D88B75A52FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone */; };
+		D88B75A82FE0E02A003ABAF4 /* TreeSitterHTMLRunestone in Frameworks */ = {isa = PBXBuildFile; productRef = D88B75A72FE0E02A003ABAF4 /* TreeSitterHTMLRunestone */; };
 		D88B763D2FE20503003ABAF4 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D88B763C2FE20503003ABAF4 /* WidgetKit.framework */; };
 		D88B763F2FE20503003ABAF4 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D88B763E2FE20503003ABAF4 /* SwiftUI.framework */; };
 		D88B76502FE20504003ABAF4 /* LoomWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D88B763A2FE20503003ABAF4 /* LoomWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D8C2873E301D8E2A00944DD3 /* LoomShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D8C28734301D8E2A00944DD3 /* LoomShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D8EXAMPLES0002000000002 /* Examples in Resources */ = {isa = PBXBuildFile; fileRef = D8EXAMPLES0001000000001 /* Examples */; };
 		D8F3788C2FDE460400CD6EC9 /* Runestone in Frameworks */ = {isa = PBXBuildFile; productRef = 5F7D4AF8A6C34ED693AA6746 /* Runestone */; };
 /* End PBXBuildFile section */
 
@@ -52,6 +55,7 @@
 		D88B763E2FE20503003ABAF4 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		D88B76562FE20524003ABAF4 /* LoomWidgetExtensionExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LoomWidgetExtensionExtension.entitlements; sourceTree = "<group>"; };
 		D8C28734301D8E2A00944DD3 /* LoomShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LoomShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D8EXAMPLES0001000000001 /* Examples */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Examples; sourceTree = "<group>"; };
 		D8F378572FDE3BAF00CD6EC9 /* Loom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Loom.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -66,6 +70,7 @@
 		D88B76582FE20584003ABAF4 /* Exceptions for "Loom" folder in "LoomWidgetExtensionExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Widget/LoomActivityAttributes.swift,
 				Widget/WidgetNode.swift,
 				Widget/WidgetView.swift,
 			);
@@ -132,8 +137,10 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				D88B75A62FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone in Frameworks */,
+				D88B75A82FE0E02A003ABAF4 /* TreeSitterHTMLRunestone in Frameworks */,
 				D8F3788C2FDE460400CD6EC9 /* Runestone in Frameworks */,
 				AA000001AA000001AA000001 /* GRDB in Frameworks */,
+				BB000001BB000001BB000001 /* MarkdownUI in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -153,6 +160,7 @@
 			children = (
 				D88B76562FE20524003ABAF4 /* LoomWidgetExtensionExtension.entitlements */,
 				D8F378592FDE3BAF00CD6EC9 /* Loom */,
+				D8EXAMPLES0001000000001 /* Examples */,
 				D88B76402FE20503003ABAF4 /* LoomWidgetExtension */,
 				D8C28735301D8E2A00944DD3 /* LoomShareExtension */,
 				D88B763B2FE20503003ABAF4 /* Frameworks */,
@@ -232,6 +240,8 @@
 				5F7D4AF8A6C34ED693AA6746 /* Runestone */,
 				AA000002AA000002AA000002 /* GRDB */,
 				D88B75A52FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone */,
+				D88B75A72FE0E02A003ABAF4 /* TreeSitterHTMLRunestone */,
+				BB000002BB000002BB000002 /* MarkdownUI */,
 			);
 			productName = Loom;
 			productReference = D8F378572FDE3BAF00CD6EC9 /* Loom.app */;
@@ -271,6 +281,7 @@
 				632BCDD613BB43A285528950 /* XCRemoteSwiftPackageReference "Runestone" */,
 				AA000003AA000003AA000003 /* XCRemoteSwiftPackageReference "GRDB" */,
 				D88B75A42FE0E02A003ABAF4 /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */,
+				BB000003BB000003BB000003 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D8F378582FDE3BAF00CD6EC9 /* Products */;
@@ -298,6 +309,7 @@
 		D8F378552FDE3BAF00CD6EC9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
+				D8EXAMPLES0002000000002 /* Examples in Resources */,
 			);
 		};
 /* End PBXResourcesBuildPhase section */
@@ -481,6 +493,7 @@
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Loom scripts can pick photos from your library when requested.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "Loom scripts can create and manage your reminders when requested.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Loom scripts can transcribe your speech to text.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -527,6 +540,7 @@
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Loom scripts can pick photos from your library when requested.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "Loom scripts can create and manage your reminders when requested.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Loom scripts can transcribe your speech to text.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -725,6 +739,14 @@
 				minimumVersion = 6.0.0;
 			};
 		};
+		BB000003BB000003BB000003 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 		D88B75A42FE0E02A003ABAF4 /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/simonbs/TreeSitterLanguages";
@@ -746,10 +768,20 @@
 			package = AA000003AA000003AA000003 /* XCRemoteSwiftPackageReference "GRDB" */;
 			productName = GRDB;
 		};
+		BB000002BB000002BB000002 /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB000003BB000003BB000003 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
 		D88B75A52FE0E02A003ABAF4 /* TreeSitterTypeScriptRunestone */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D88B75A42FE0E02A003ABAF4 /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
 			productName = TreeSitterTypeScriptRunestone;
+		};
+		D88B75A72FE0E02A003ABAF4 /* TreeSitterHTMLRunestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D88B75A42FE0E02A003ABAF4 /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
+			productName = TreeSitterHTMLRunestone;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

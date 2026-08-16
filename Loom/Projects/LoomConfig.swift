@@ -52,6 +52,10 @@ struct LoomConfig: Codable, Equatable {
 
     struct WidgetConfig: Codable, Equatable {
         var refreshAfter: Double? = nil
+        /// Tapping the widget body runs the script. Off by default: the tap otherwise just opens
+        /// Loom, and silently turning every existing widget into a script trigger isn't a change
+        /// a project should get without asking.
+        var runOnTap = false
     }
 
     struct AIConfig: Codable, Equatable {

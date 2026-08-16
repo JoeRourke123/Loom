@@ -332,10 +332,18 @@ struct WidgetView: View {
             .background(color.opacity(0.15))
             .clipShape(Capsule())
 
-        if !projectName.isEmpty, !kvKey.isEmpty {
-            return AnyView(Button(intent: WidgetButtonIntent(kvKey: kvKey, projectName: projectName)) { pill })
+        guard !projectName.isEmpty, !kvKey.isEmpty else { return AnyView(pill) }
+
+        // runsScript trades the extension-local KV write for a real run in the main app, which is
+        // the only process that can host JSC — so it has to leave the widget. That's a Link, not
+        // Button(intent:): an intent that could run a script would have to compile into the
+        // extension, where ScriptRunner doesn't exist. DeepLinkHandler writes the same KV
+        // timestamp before starting the run, so Loom.kv.get(kvKey) still sees the tap.
+        if node.props["runsScript"] as? Bool == true,
+           let url = WidgetResult.tapURL(projectName: projectName, buttonKey: kvKey) {
+            return AnyView(Link(destination: url) { pill })
         }
-        return AnyView(pill)
+        return AnyView(Button(intent: WidgetButtonIntent(kvKey: kvKey, projectName: projectName)) { pill })
     }
 
     private func toggleView(_ node: WidgetNode) -> some View {

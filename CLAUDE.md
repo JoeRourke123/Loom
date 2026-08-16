@@ -34,6 +34,10 @@ Do NOT write an ADR for obvious choices or implementation details.
 - Making a non-obvious architectural decision → ADR in decisions/
 - Finishing a task → entry in DONE.md, tick milestone checkbox, remove from ACTIVE
 - Discovering new required work → add to BACKLOG.md and the relevant milestone
+- **Changing the JS-facing surface** (a bridge method, a `w.*` builder, a `loom()` config key) →
+  add it to `LoomAPICatalog.signatures`, then run the **`loom-playgrounds`** skill to cover it in
+  `Examples/playground/`. `ExampleCatalog.runPlaygroundCoverageCheck()` fails the DEBUG launch
+  check until you do.
 
 ---
 
@@ -46,25 +50,27 @@ Do NOT write an ADR for obvious choices or implementation details.
 
 ### Project Model
 - Projects = folders in `iCloud Drive/Loom/`
-- `main.ts` is the sole source of truth — config + script logic via `loom()` wrapper
+- `main.ts` is the entry point — config + script logic via `loom()` wrapper. Other `.ts` files beside it are importable; the `widget` export and entity providers are only ever read from `main.ts`
 - `widget.ts` for optional widget data provider (same `loom()` wrapper pattern)
 - `secrets.json` — Keychain-backed, never synced
 - Loom statically extracts config from `loom()` call without executing the script
 - No `loom.config.json` — config lives in `main.ts`
 
 ### Execution Engine
-- **Compiler:** SWC via WASM (`@swc/wasm-typescript`) — initialises once per app session
+- **Compiler:** SWC via WASM (`@swc/wasm`, full transform — emits CommonJS) — initialises once per app session. Ships as `wasm.js` glue + a separate ~19 MB `wasm_bg.wasm` resource
 - **Runtime:** JavaScriptCore (`JSContext`), one context per script run (isolated, disposable)
-- **Imports:** ESM-style at authoring time; SWC bundles to single JS payload before execution
-- **Guard:** Memory limit only (no timeout)
-- Pre-bundled vendor packages: `lodash`, `date-fns`, `zod`, `axios`, `cheerio`, `mathjs`, `marked`, `csv-parse`, `yaml`
+- **Imports:** ESM at authoring time. `ModuleBundler` walks the import graph at compile time and emits a lazy CommonJS registry into one JS payload
+  - `./helpers` → sibling `.ts` file, flat (no subfolders), `.ts` only so `secrets.json` stays unreachable
+  - `https://…` → fetched once, cached per project under Application Support, never auto-refetched (ADR-017)
+- **Guard:** Memory limit only (no timeout); import graph capped at 64 modules
+- Pre-bundled vendor packages (8, **not** axios): `lodash`, `date-fns`, `zod`, `cheerio`, `mathjs`, `marked`, `csv-parse`, `yaml`
 
 ### Native Bridge — `Loom` global
 Single JS global, namespaced:
 ```
 Loom.context / .network / .files / .db / .kv / .log / .ui / .notify
      .health / .location / .contacts / .calendar / .camera / .photos
-     .share / .clipboard / .speech / .device / .ai
+     .share / .clipboard / .speech / .device / .ai / .activity
 ```
 All async methods return Promises. Errors throw JS exceptions.
 

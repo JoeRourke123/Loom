@@ -5,7 +5,10 @@ import Foundation
 // Fired when a w.button() is tapped in a widget.
 // Writes a ms-precision timestamp to NSUbiquitousKeyValueStore[projectName:kvKey].
 // main.ts reads it on the next run via Loom.kv.get(kvKey).
-struct WidgetButtonIntent: AppIntent {
+// LiveActivityIntent, not plain AppIntent: it refines AppIntent, so widget buttons are unaffected,
+// and it is what makes the same w.button() work inside a Live Activity — those run in the main app
+// process rather than the widget extension.
+struct WidgetButtonIntent: LiveActivityIntent {
     static var title: LocalizedStringResource { "Widget Button Tapped" }
     static var isDiscoverable: Bool { false }
 
@@ -30,7 +33,7 @@ struct WidgetButtonIntent: AppIntent {
 
 // Fired when a w.toggle() is tapped in a widget.
 // Writes !currentValue to NSUbiquitousKeyValueStore[projectName:kvKey].
-struct WidgetToggleIntent: AppIntent {
+struct WidgetToggleIntent: LiveActivityIntent {
     static var title: LocalizedStringResource { "Widget Toggle Changed" }
     static var isDiscoverable: Bool { false }
 

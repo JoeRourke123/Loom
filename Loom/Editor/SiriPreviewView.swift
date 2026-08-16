@@ -129,16 +129,14 @@ enum SiriLint {
                 findings.append(LintFinding(message: "\"\(param.name)\" has no description — weaker Siri natural-language matching."))
             }
 
-            var counts: [LoomConfig.IntentParam.ParamType: Int] = [:]
-            for param in inputs { counts[param.type, default: 0] += 1 }
-            for type in counts.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
-                let count = counts[type] ?? 0
-                let limit = IntentSlotMapping.limit(for: type)
-                if count > limit {
-                    findings.append(LintFinding(
-                        message: "\(count) \(type.rawValue) parameters declared, only \(limit) supported; extras ignored."
-                    ))
-                }
+            // There was a per-type cap warning here (4 strings / 2 numbers / 2 booleans / 1 date)
+            // while the Shortcuts action mapped inputs onto fixed parameter slots. It now takes a
+            // dictionary, so there's no cap left to warn about.
+            let duplicates = Set(inputs.map(\.name).filter { name in
+                inputs.filter { $0.name == name }.count > 1
+            })
+            for name in duplicates.sorted() {
+                findings.append(LintFinding(message: "\"\(name)\" is declared more than once — only one value can arrive under that key."))
             }
         }
 
@@ -196,11 +194,16 @@ enum SiriLint {
         undescribed.intent = LoomConfig.IntentConfig(inputs: [param("city", .string, nil)])
         check("undescribed.flagged", SiriLint.check(config: undescribed, rawSource: "").count == 1)
 
-        // Over the string-slot bound (4).
-        var overflow = LoomConfig(name: "X", description: "Does a thing.")
-        overflow.intent = LoomConfig.IntentConfig(inputs: (1...5).map { param("s\($0)", .string, "d") })
-        let overflowFindings = SiriLint.check(config: overflow, rawSource: "")
-        check("overflow.flagged", overflowFindings.contains { $0.message.contains("only 4 supported") })
+        // Many inputs of one type is fine now the action takes a dictionary — this used to be
+        // capped at 4 strings and is the regression test for that cap being gone.
+        var many = LoomConfig(name: "X", description: "Does a thing.")
+        many.intent = LoomConfig.IntentConfig(inputs: (1...9).map { param("s\($0)", .string, "d") })
+        check("many.noCapWarning", SiriLint.check(config: many, rawSource: "").isEmpty)
+
+        // Two inputs sharing a name silently collide in the dictionary.
+        var duplicate = LoomConfig(name: "X", description: "Does a thing.")
+        duplicate.intent = LoomConfig.IntentConfig(inputs: [param("city", .string, "d"), param("city", .number, "d")])
+        check("duplicate.flagged", SiriLint.check(config: duplicate, rawSource: "").contains { $0.message.contains("more than once") })
 
         // Entity provider export missing from source.
         var missingProvider = LoomConfig(name: "X", description: "Does a thing.")

@@ -21,17 +21,17 @@ Move items to ACTIVE.md when starting, DONE.md when complete.
 - [ ] **Project list UI** — list projects from iCloud Drive, create new project (scaffolds `main.ts`), delete project, rename project.
 - [ ] **`main.ts` static config extraction** — parse the `loom()` call's second argument (config object) statically without executing the script. Extract: `name`, `description`, `permissions`, `triggers`, `intent`, `entities`, `health`, `widget`, `ai`.
 - [ ] **`secrets.json` — Keychain-backed** — read/write secrets via Keychain. Never write to iCloud. Excluded from `.loom` exports.
-- [ ] **`.loom` ZIP export/import** — export project folder as ZIP with `.loom` extension (excluding `secrets.json`). Import by unzipping into `iCloud Drive/Loom/`.
+- [ ] **`.loom` ZIP export/import** — export project folder as ZIP with `.loom` extension (excluding `secrets.json`). Import by unzipping into `iCloud Drive/Loom/`. **Must include every `.ts` in the folder, not just `main.ts`** — since ADR-016 a project can import sibling modules, and an exporter that ships only the entry produces an archive that fails on first run at the recipient. Cached remote modules are deliberately *not* included (they live outside the project folder and re-fetch on first run).
 - [ ] **Project scaffolding** — when creating a new project, write a starter `main.ts` with the `loom()` wrapper pattern.
 
 ---
 
 ## Execution Engine
 
-- [ ] **SWC WASM integration** — bundle `@swc/wasm-typescript` into the app. Initialise once per app session, hold in memory. Expose a `compile(source: String) async -> String` Swift API.
-- [ ] **JSC execution context** — one `JSContext` per script run. Isolated, disposable. Wire up the `Loom` global before executing. Kill context on OOM.
-- [ ] **Module bundling** — SWC resolves ESM imports and bundles to a single JS payload. `@loom/*` pseudo-package resolves to stdlib. `@loom/vendor/*` and named vendor imports resolve to pre-bundled packages.
-- [ ] **Pre-bundled vendor packages** — bundle at app build time: `lodash`, `date-fns`, `zod`, `axios`, `cheerio`, `mathjs`, `marked`, `csv-parse`, `yaml`. Scripts import as if from npm.
+- [x] **SWC WASM integration** — bundle `@swc/wasm` into the app (upgraded from `@swc/wasm-typescript`, ADR-016). Initialise once per app session, hold in memory. Expose a `compile(source: String) async -> String` Swift API.
+- [x] **JSC execution context** — one `JSContext` per script run. Isolated, disposable. Wire up the `Loom` global before executing. Kill context on OOM.
+- [x] **Module bundling** — SWC emits CommonJS; `ModuleBundler` walks the import graph and emits a lazy CJS registry as one JS payload. `@loom/*` and vendor names resolve through a fast-path map; `./name` resolves to sibling `.ts` files; `https://…` fetches and caches (ADR-016, ADR-017).
+- [x] **Pre-bundled vendor packages** — bundled at app build time: `lodash`, `date-fns`, `zod`, `cheerio`, `mathjs`, `marked`, `csv-parse`, `yaml`. 8, not 9 — `axios` needs an XHR shim and was dropped in favour of `Loom.network.fetch`.
 - [ ] **`ctx` object** — inject `ctx.input` (typed from Zod schema), `ctx.trigger` (`'manual' | 'urlScheme' | 'shareSheet' | 'shortcut' | 'siri' | 'backgroundRefresh' | 'backgroundProcessing'`), `ctx.runId` (UUID string) into JSC before execution.
 - [ ] **Run result capture** — capture the resolved value of the default export's returned Promise. Store in run history. Pass back to App Intent if `returnsResult: true`.
 - [ ] **`console.log` capture** — intercept `console.log/warn/error` in JSC; store as `level: 'debug'` log entries. Stream to Console view in real time.
@@ -100,14 +100,16 @@ Each namespace below is a separate implementation task.
 ## Logging System
 
 - [ ] **SQLite log store** — create and manage `logs` table: `id, run_id, project_name, timestamp, level, message, data`. Thread-safe writes.
-- [ ] **Logs tab UI** — filter by project/level/date range. Full-text search over `message`. JSON data viewer. Export as JSON or CSV.
+- [x] **Logs tab UI** — filter by project/level/date range. Full-text search over `message`. JSON data viewer. Export as JSON or CSV.
+- [ ] **Log query extras** — `OR`/grouping, `| stats` beyond `count`, saved log queries. Deliberately out of v1: comma values and `level>=` cover the common cases without a boolean grammar.
 
 ---
 
 ## Database Viewer
 
-- [ ] **Database tab — relational view** — table browser (all tables grouped by project), paginated row viewer with JSON blob expansion, raw SQL query console, schema inspector.
-- [ ] **Database tab — KV view** — key listing with prefix filter, value viewer (auto-detect JSON), inline edit, swipe-to-delete.
+- [x] **Database tab — relational view** — table browser (all tables grouped by project), paginated row viewer with JSON blob expansion, raw SQL query console, schema inspector.
+- [x] **Database tab — KV view** — key listing with prefix filter, value viewer (auto-detect JSON), inline edit, swipe-to-delete.
+- [ ] **Saved KV filters / KV query intents** — `KVQuery` is deliberately not Codable and not reachable from Shortcuts (ADR-018 covers tables only). Add if something needs to replay one.
 
 ---
 
@@ -126,3 +128,26 @@ Each namespace below is a separate implementation task.
 - [ ] **Permission declaration extraction** — parse `permissions` array from static config. Track granted/denied state per project.
 - [ ] **Runtime permission prompts** — when a script calls a permissioned API, check if permission is granted. If not, prompt via iOS system dialog. Cache grant status.
 - [ ] **HealthKit permission scoping** — request only the `health.read` / `health.write` quantity types declared in `loom()` options.
+
+---
+
+## In-App Documentation
+
+- [x] **Docs content set** — full API reference (one page per `Loom.*` namespace + `@loom/widget` builder + `loom()` config object), Getting Started, Core Concepts, guides/tutorials (first script, database, widgets, Siri/Shortcuts, background tasks, AI, permissions, share extension, debugging, export/import), Troubleshooting, Limitations. Markdown, bundled as app resources.
+- [x] **`DocsView` + navigation entry** — new `SidebarDestination.docs` case. Categorized list (Getting Started / Guides / API Reference / Troubleshooting), `.searchable` title filter, `NavigationLink` to `DocDetailView`.
+- [x] **Markdown rendering** — `MarkdownUI` (SPM) renders bundled `.md` content: headings, code blocks, tables, lists, links.
+- [x] **Architecture diagrams** — 4 hand-authored native SwiftUI diagram views (execution flow, bridge architecture, widget data flow, Siri/intents flow), embedded into docs via a `diagram://` `ImageProvider`.
+
+---
+
+## AI Authoring Assistant
+
+Distinct from `Loom.ai` above — that's a script-facing bridge API; this is an app feature that writes scripts. Bring-your-own-key, streaming, tool-using. See ADR-011.
+
+- [x] **`AIProvider` + `AIProviderStore`** — user-defined providers (name, wire format `openai`|`anthropic`, base URL, model, key). Keychain-backed via existing `KeychainManager`, separate services from the `Loom.ai` Claude/Gemini keys. Settings UI: "Authoring Assistant" section + provider list/edit view with a "Test" button.
+- [x] **`AIClient` streaming SSE** — `URLSession.bytes(for:)`-based, one entry point over two wire dialects (Anthropic Messages, OpenAI Chat Completions), text deltas + tool-call deltas + usage as an `AsyncThrowingStream<StreamEvent, Error>`. No model list — free-text model field.
+- [x] **`authoring-rules.md`** — hand-written cross-cutting rules (static config literal requirement, vendor package list, `export const` only, `triggers.schedule` gotcha, `Loom.ai.complete` two-arg signature) + a runtime-generated manifest from `DocCatalog.pages`, injected as system context every turn.
+- [x] **Assistant tools** — `read_doc(filename)`, `read_file(filename)`, `write_file(filename, content)` (create/update only, path-guarded to the project folder, no delete), `check_script(filename)` (chains `SWCCompiler.compile` → `ConfigExtractor.extract` → `SiriLint.check`), `run_script()` (`ScriptRunner.startRun`, returns status/logs/result).
+- [x] **Pre-write snapshot + revert** — before the first write of a turn, copy the project folder to `Application Support/loom_assistant_backup/<project>/`; "Revert AI changes" button restores it.
+- [x] **`AssistantSession` + `AssistantPanelView`** — agent loop (stream → tool call → tool result → repeat, capped), chat UI as a third tab in the editor's bottom panel alongside Console/Siri.
+- [x] **"Describe it" project creation** — new card in `ProjectCreationSheet` alongside Blank and Browse Examples; scaffolds a blank project then opens the assistant tab with the prompt already sent.

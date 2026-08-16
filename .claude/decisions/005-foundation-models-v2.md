@@ -1,6 +1,19 @@
 # ADR-005: Foundation Models v2 LanguageModel protocol for all AI providers
 Date: 2026-06-14
-Status: accepted
+Status: accepted (superseded in practice — see note below)
+
+## Superseded in practice (2026-08-01)
+
+The decision below was never fully built. `AIBridge.swift`'s Claude and Gemini paths
+are raw inline `URLRequest`/`JSONSerialization` HTTP calls, not `LanguageModel`
+conformances — there is no `LanguageModel` protocol usage anywhere in the codebase
+outside the Apple on-device path (`SystemLanguageModel`/`LanguageModelSession`). Only
+`'auto'` and `'apple'` actually share a code path; `'claude'`/`'gemini'` are separate
+hand-rolled functions per ADR-005's own "One line to swap providers" claim not holding.
+Left as-is rather than retrofitted, since M8's `AIClient` (ADR-011) is a second,
+intentionally separate HTTP client for a different feature (streaming, tool use,
+user-defined providers) — fixing this ADR's gap is a `Loom.ai`-only follow-up, not
+blocking M8.
 
 ## Context
 `Loom.ai.*` needs to support multiple AI backends: Apple on-device (Private Cloud Compute), Claude (Anthropic), Gemini (Google). Options:

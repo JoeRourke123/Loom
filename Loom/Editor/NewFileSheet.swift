@@ -8,57 +8,43 @@ struct NewFileSheet: View {
     @State private var customName = ""
     @Environment(\.dismiss) private var dismiss
 
-    private var templates: [(name: String, icon: String, description: String)] {
-        var result: [(String, String, String)] = []
-        if !existingNames.contains("widget.ts") {
-            result.append(("widget.ts", "rectangle.on.rectangle", "WidgetKit data provider"))
-        }
-        return result
+    /// The extension the user actually typed, if Loom recognises it. A leading-dot name like
+    /// ".html" has no pathExtension by NSString's rules, so it falls through to nil and gets
+    /// rejected by canCreate rather than creating a hidden file.
+    private var typedExtension: String? {
+        let ext = (customName.trimmingCharacters(in: .whitespaces) as NSString).pathExtension.lowercased()
+        return LoomProject.editableExtensions.contains(ext) ? ext : nil
     }
 
     private var sanitisedName: String {
         let base = customName.trimmingCharacters(in: .whitespaces)
-        return base.hasSuffix(".ts") ? base : base + ".ts"
+        return typedExtension != nil ? base : base + ".ts"
     }
 
     private var canCreate: Bool {
         let name = sanitisedName
-        return !name.isEmpty && name != ".ts" && !existingNames.contains(name)
+        // ProjectScaffolder.createFile validates nothing, so the guard has to live here.
+        return !name.hasPrefix(".")
+            && !(name as NSString).deletingPathExtension.isEmpty
+            && !existingNames.contains(name)
     }
 
     var body: some View {
         NavigationStack {
             List {
-                if !templates.isEmpty {
-                    Section("Templates") {
-                        ForEach(templates, id: \.name) { t in
-                            Button {
-                                create(name: t.name)
-                            } label: {
-                                Label {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(t.name).foregroundStyle(.primary)
-                                        Text(t.description)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                } icon: {
-                                    Image(systemName: t.icon)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Section("Custom") {
+                Section {
                     HStack {
                         TextField("filename", text: $customName)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
                             .keyboardType(.asciiCapable)
-                        Text(".ts")
-                            .foregroundStyle(.secondary)
+                        if typedExtension == nil {
+                            Text(".ts")
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                } footer: {
+                    Text("main.ts is the entry point. Other .ts files here can be imported from it with `import { x } from './name'`. Widgets come from main.ts's `widget` export, not a separate file. Type a full name to create an .html page template for `Loom.ui.web()`.")
                 }
             }
             .navigationTitle("New File")
