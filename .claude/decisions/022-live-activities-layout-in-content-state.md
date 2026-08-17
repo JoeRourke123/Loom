@@ -64,11 +64,12 @@ hidden for weeks.
 
 ### 4. Script errors reject; environment refusals warn and continue
 
-`start()` on a background run **cannot work** — iOS requires a foreground app, and returns
+`start()` needs a run the user asked for — see §5, which was amended once the `LiveActivityIntent`
+route was understood. An unattended background refresh **cannot work** and returns
 `ActivityAuthorizationError.visibility`. Update and end have no such restriction.
 
 The line drawn: a script's own mistake (no `key`, oversized layout) rejects the promise, because the
-script can fix it. An environment refusal (no foreground, permission off, system limit) logs a
+script can fix it. An environment refusal (unprivileged run, permission off, system limit) logs a
 `.warn` naming the cause and resolves `null`, matching how `Loom.ui` degrades — a background refresh
 must not fail a run for wanting UI it cannot have.
 
@@ -76,20 +77,53 @@ Deliberately **no `ForegroundGate` wait** before `start()`, unlike App Intents (
 a script that wants a visible activity is normally already in a foreground run, and making every
 background `start()` pay a 6-second scene wait to still fail is worse than failing immediately.
 
-### 5. `WidgetButtonIntent`/`WidgetToggleIntent` conform to `LiveActivityIntent`
+This stayed the right call after the §5 amendment, for a different reason: the privilege comes from
+the intent's conformance, not from having a scene, so a scene wait would buy nothing.
 
-`LiveActivityIntent: SystemIntent: AppIntent` is a strict refinement, so the existing widget buttons
-keep working unchanged, and the same `w.button` now works in an activity — where it matters more,
-because it runs in the app process rather than the extension.
+### 5. The run intents conform to `LiveActivityIntent` too
+
+*Amended 2026-08-16. As shipped, only `WidgetButtonIntent`/`WidgetToggleIntent` conformed, and this
+ADR claimed a Shortcut could not start an activity. That was wrong.*
+
+`LiveActivityIntent: SystemIntent: AppIntent` is a strict refinement, so conforming costs nothing —
+the widget buttons kept working unchanged, and the same `w.button` works in an activity, where it
+matters more because it runs in the app process rather than the extension.
+
+The part missed first time round is that the conformance is not decoration. It is the documented
+mechanism by which a *background* run may start an activity:
+
+> "you can't do this while your app is in the background, unless you adopt App Intents and start the
+> Live Activity using a `LiveActivityIntent`" — [`Activity.request`](https://developer.apple.com/documentation/activitykit/activity/request(attributes:content:pushtype:))
+
+> "the system launches your app process **without opening the app**, performs the intent, and starts
+> the Live Activity" — [`LiveActivityIntent`](https://developer.apple.com/documentation/appintents/liveactivityintent)
+
+So `RunScriptIntent` and `RunScriptWithInputIntent` now conform, and a Shortcut with "Open When Run"
+off starts a script's Live Activity without Loom ever appearing. This is how Timery's and Apple
+Clock's own Shortcuts actions work.
+
+**The boundary, which is what actually needed writing down.** The privilege is granted only when the
+*system* performs the intent for the user — a Shortcut, a Siri phrase, a widget or Control Centre
+tap. Apple DTS is explicit ([forum 818467](https://developer.apple.com/forums/thread/818467)) that an
+arbitrary background wake-up still throws `.visibility` *even from inside a `LiveActivityIntent`*. So
+a `BGAppRefreshTask` fan-out (M7) cannot start one, and no amount of conformance changes that. The
+only remaining route for a truly unattended start is APNs push-to-start, which needs a server —
+still rejected, see the Consequences below.
+
+The conformance rides on the two intents users actually pick rather than a separate "start a Live
+Activity" action, because any script might call `Loom.activity.start()` and a user cannot know which
+action they need without reading the script.
 
 ## Consequences
 
 - A layout is capped at ~3.5 KB. Charts are the realistic way to exceed it; ordinary layouts are
   under 400 bytes.
-- Activities cannot be started from background refresh, Siri-without-foreground, or the Share
-  Extension. Scripts that need this pattern start in the foreground and update from the background.
-- No push updates. An activity only changes when a run changes it, so an 8-hour activity needs a
-  background trigger to stay current. Push would need a server, which Loom does not have by design.
+- Activities can be started from anything the user asked for — in-app, a Shortcut (open or not),
+  Siri, the Share Extension. They cannot be started from a background refresh, and there is no
+  workaround for that short of a push server.
+- No push updates, and therefore no push-to-start either. An activity only changes when a run
+  changes it, so an 8-hour activity needs a background trigger to stay current. Push would need a
+  server, which Loom does not have by design.
 - Apple Watch and CarPlay are one line away (`.supplementalActivityFamilies([.small])`) and
   deliberately not enabled — not requested, and the small family needs its own layout pass to be
   worth shipping.

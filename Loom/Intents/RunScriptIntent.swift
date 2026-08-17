@@ -3,7 +3,14 @@ import AppIntents
 // Auto intent — always present, no declared parameters. Every project is invokable this way
 // regardless of whether it declares an `intent` block in loom(); see RunScriptWithInputIntent
 // for the typed-parameter variant driven by a project's Zod intent.inputs schema.
-struct RunScriptIntent: AppIntent {
+//
+// LiveActivityIntent, not plain AppIntent — the same refinement WidgetButtonIntent uses, and the
+// only reason a script's Loom.activity.start() works when the shortcut runs with "Open When Run"
+// off. Activity.request is foreground-only *unless* the system is performing a LiveActivityIntent
+// on the user's behalf, in which case it launches the app process without opening the app. The
+// script that runs is arbitrary, so the privilege has to ride on the intent users actually pick;
+// a separate "start a Live Activity" action would be unpickable without reading the script first.
+struct RunScriptIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Run Script"
     static let description = IntentDescription("Runs a Loom project's script.")
 

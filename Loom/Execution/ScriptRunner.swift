@@ -152,7 +152,12 @@ actor ScriptRunner {
             if let widgetVal = ctx.evaluateScript("__loom_widget_result__"),
                !widgetVal.isUndefined, !widgetVal.isNull,
                let widgetJSON = widgetVal.toString() {
-                WidgetResult.write(projectName: project.name, json: widgetJSON)
+                // Remote image URLs are downloaded into the App Group and rewritten to local
+                // paths first — a widget snapshot never waits for AsyncImage, so anything still
+                // remote at this point renders as a grey box forever. Bounded to 8s, and only
+                // images not already cached are fetched.
+                let materialised = WidgetImageCache.materialise(json: widgetJSON, projectName: project.name)
+                WidgetResult.write(projectName: project.name, json: materialised)
                 Task { @MainActor in WidgetCenter.shared.reloadAllTimelines() }
             }
         }

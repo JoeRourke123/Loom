@@ -88,6 +88,9 @@ export default loom(async (ctx) => {
 
   return {
     summary: `${passed} passed, ${failed} failed, ${skipped} skipped.`,
+    // Returned as well as logged so a run you did not start by hand — a background window, a
+    // Shortcut, a share — says so on the Run History row without opening the logs.
+    trigger: ctx.trigger,
     ran: chosen,
     passed,
     failed,
@@ -232,6 +235,13 @@ export const widget = (ctx: any) => {
         w.toggle({ label: 'Verbose', kvKey: 'playground.verbose', value: Boolean(Loom.kv.get('playground.verbose')), color: 'teal', font: 'caption' }),
       ], { spacing: 8 }),
 
+      // w.date renders a live clock-driven string — WidgetKit re-renders it on its own, so it
+      // is the one node that stays correct between runs. 'relative' always shows two units
+      // ("2 days, 23 hrs"); 'days' is Loom's own single-unit countdown, which the extension
+      // re-renders at each midnight instead of continuously.
+      w.date(new Date(Date.now() + 3 * 86400000).toISOString(), { style: 'relative', font: 'caption', color: 'secondary' }),
+      w.date(new Date(Date.now() + 3 * 86400000).toISOString(), { style: 'days', font: 'caption', color: 'secondary' }),
+
       // Remote image — the only builder here that needs the network at render time.
       w.image('https://placehold.co/240x60/6366f1/ffffff/png?text=Loom', { cornerRadius: 6, width: 240, height: 60 }),
     ], { spacing: 8, padding: 12, alignment: 'leading' }),
@@ -245,6 +255,20 @@ export const widget = (ctx: any) => {
       ...((d.results ?? []) as Result[]).filter((r) => r.ok === false).slice(0, 8).map((r) => w.hstack([
         w.rectangle([], { color: 'red', cornerRadius: 3 }),
         w.icon('xmark.circle.fill', { size: 12, color: 'red' }),
+        w.text(r.api, { font: 'caption', lineLimit: 1 }),
+        w.spacer(),
+        w.text(r.note, { font: 'caption2', color: 'secondary', lineLimit: 1 }),
+      ], { spacing: 6 })),
+    ], { spacing: 8, padding: 16, alignment: 'leading' }),
+
+    // iOS 27's tall XL family. Same width as `large`, double the height — so it gets more rows
+    // rather than a wider layout. Omit this key and the extension falls back to `large`.
+    extraLargePortrait: w.vstack([
+      w.label({ icon: 'testtube.2', title: 'API Playground', subtitle: `${total} probes`, color: 'indigo' }),
+      w.divider(),
+      w.barChart({ data: trend, color: 'indigo' }),
+      ...((d.results ?? []) as Result[]).slice(0, 16).map((r) => w.hstack([
+        w.icon(r.ok ? 'checkmark.circle.fill' : 'xmark.circle.fill', { size: 12, color: r.ok ? 'green' : 'red' }),
         w.text(r.api, { font: 'caption', lineLimit: 1 }),
         w.spacer(),
         w.text(r.note, { font: 'caption2', color: 'secondary', lineLimit: 1 }),

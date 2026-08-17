@@ -14,6 +14,11 @@
 			<string>Any</string>
 		</dict>
 	</dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>uk.co.joerourke.Loom.refresh</string>
+		<string>uk.co.joerourke.Loom.processing</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

@@ -378,7 +378,7 @@ enum ModuleBundler {
     };
     """
 
-    // @loom/widget module — 22 w.* builder functions as a self-contained IIFE.
+    // @loom/widget module — 23 w.* builder functions as a self-contained IIFE.
     // Assigns to globalThis.__loom_widget__ which the requireShim maps to '@loom/widget'.
     private static let loomWidgetModule = """
     (function() {
@@ -395,6 +395,7 @@ enum ModuleBundler {
         spacer:      function(p)    { return n('spacer', p); },
         divider:     function(p)    { return n('divider', p); },
         text:        function(x, p) { if (x && typeof x === 'object') return n('text', x); return n('text', Object.assign({ content: String(x) }, p || {})); },
+        date:        function(x, p) { if (x && typeof x === 'object') return n('date', x); return n('date', Object.assign({ value: String(x) }, p || {})); },
         label:       function(p)    { return n('label', p); },
         image:       function(u, p) { if (u && typeof u === 'object') return n('image', u); return n('image', Object.assign({ url: String(u) }, p || {})); },
         icon:        function(x, p) { if (x && typeof x === 'object') return n('icon', x); return n('icon', Object.assign({ name: String(x) }, p || {})); },
@@ -537,7 +538,7 @@ enum ModuleBundler {
     // JSContext, so it has the full Loom bridge and may be async.
     //
     // One call, not one per family: returning a w.* node reuses it for every size, returning a
-    // { small, medium, large, extraLarge } map gives per-family trees. A node always carries
+    // { small, medium, large, extraLarge, extraLargePortrait } map gives per-family trees. A node always carries
     // `.type` and a size map never does, which is what tells the two apart.
     //
     // A throwing widget is reported via __loom_widget_error__ but never rejects — a broken
@@ -564,7 +565,7 @@ enum ModuleBundler {
             refreshAfter: (cfg && typeof cfg.refreshAfter === 'number') ? cfg.refreshAfter : null,
             runOnTap: !!(cfg && cfg.runOnTap === true)
           };
-          var sizes = ['small', 'medium', 'large', 'extraLarge'];
+          var sizes = ['small', 'medium', 'large', 'extraLarge', 'extraLargePortrait'];
           var isNode = typeof tree.type === 'string';
           for (var i = 0; i < sizes.length; i++) {
             out[sizes[i]] = isNode ? tree : (tree[sizes[i]] || null);
@@ -715,7 +716,7 @@ enum ModuleBundler {
         check("widgetNode.noError", widgetNode.error == nil)
         check("widgetNode.noWidgetError", widgetNode.widgetError == nil)
         check("widgetNode.refreshAfter", widgetNode.widget?.contains("\"refreshAfter\":900") == true)
-        check("widgetNode.allSizes", ["small", "medium", "large", "extraLarge"].allSatisfy {
+        check("widgetNode.allSizes", ["small", "medium", "large", "extraLarge", "extraLargePortrait"].allSatisfy {
             widgetNode.widget?.contains("\"\($0)\":{\"type\":\"text\",\"props\":{\"content\":\"London\"}}") == true
         })
 

@@ -60,9 +60,13 @@ final class ActivityBridge {
                         )
                         resolve(key)
                     } catch {
-                        // The common cause is a background run: iOS only lets a foreground app
-                        // start an activity. Updates and ends have no such restriction, so a
-                        // background run can still drive an activity a foreground run began.
+                        // `.visibility` means the run had no privilege to start one. A foreground
+                        // run has it; so does a Shortcut or Siri run, because RunScriptIntent is a
+                        // LiveActivityIntent and the system performs it on the user's behalf. What
+                        // is left is an unattended wake-up — a background refresh — where iOS
+                        // refuses with no workaround short of a push server. Updates and ends have
+                        // no such restriction, so a background run can still drive an activity a
+                        // foreground or Shortcut run began.
                         self.warn("Loom.activity.start('\(key)') skipped — \(error.localizedDescription)")
                         resolve(NSNull())
                     }

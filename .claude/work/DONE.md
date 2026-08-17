@@ -8,6 +8,180 @@ Approach: one-line summary of what was built and any key decisions.
 
 ---
 
+## Widget images actually render — 2026-08-17
+Approach: `WidgetImageCache` downloads every `w.image` URL into the App Group at the end of a run
+and rewrites the payload to local file paths; `WidgetView.imageView` reads those synchronously.
+WidgetKit snapshots the timeline entry, so `AsyncImage` never resolved and every remote image was
+permanently its grey placeholder — visible only on device, since the in-app preview renders live.
+Bounded to 8s / 4 concurrent, and unreferenced files are pruned on each write.
+
+## `w.date` gains `style: 'days'` — a countdown that reads like one — 2026-08-17
+Approach: `'relative'` is Apple's `Text.DateStyle` and always emits two units ("4 days, 11 hrs",
+"2 mths, 23 days"), which wraps in a narrow column; `'offset'` is single-unit but signed ("−4 days").
+Neither can say "4 days", and there is no format knob — that is Apple's rendering. So `'days'` is
+Loom's own: `WidgetView` counts calendar days (midnight-to-midnight, so 23:00→01:00 is `Tomorrow`,
+not `Today`) and renders `Today` / `Tomorrow` / `N days` / `Yesterday` / `N days ago`.
+That costs the automatic re-render, so `LoomWidgetProvider` pre-renders one timeline entry per
+midnight for the next 7 days whenever `WidgetResult.usesDayCountdown` finds such a node — the count
+then advances at midnight with no script run, the same guarantee the Apple styles give at day
+resolution. Entries are rendered ahead of time, so the render date travels as an
+`@Entry var loomRenderDate` environment value rather than `Date()`; it defaults to now, which is
+right for the in-app preview and Live Activities. Verified in the preview panel: `+2h`→`Today`,
+`+20h`→`Tomorrow`, `-30h`→`Yesterday`, `84d`→`84 days`.
+
+## Configurable sheet chrome for `Loom.ui.web()` — 2026-08-17
+Approach: `subtitle`, `button` (rename, or `false` to remove) and `bar: false` (hide the navigation
+bar) added alongside the existing `title`, collected in a `LoomWebChrome` struct. The options object
+now crosses to Swift **whole** instead of as positional arguments, so the next option is a Swift-only
+change — `serveJS` just calls `open(opts)` and Swift reads the keys it knows, never touching
+`routes`. Only a literal boolean `false` strips chrome, so a truthy stray value can't. With no
+dismiss button the grabber is forced visible, since swipe-down becomes the only exit. No `detent`
+option and no programmatic close from a route handler — both still deferred (ADR-014 amendment).
+Verified on the iOS 27 simulator: all three options render, routing and dismissal still resume the
+run, and a call passing none of them is pixel-identical to before.
+
+## Concurrent bridge batches — `network.fetchAll` / `ai.completeAll` — 2026-08-17
+Approach: batch primitives that fan out below the blocking `makePromise` and wait once, rather than
+converting the bridges to deferred promises (ADR-025). `makePromise` blocks the script thread and
+returns an already-settled promise, so `Promise.all` over `Loom.*` was serial by construction and
+unreachable from JS. Caps at 8 in flight / 64 per batch; results are positional and a failed
+element carries its own `error` instead of rejecting the batch. Measured on gpt-oss:120b: 7
+completions 67s → 20s, and a full Daily Poem article ~70s → ~28s.
+
+## `w.date` — the one widget node that updates without a run — 2026-08-17
+Approach: 23rd `w.*` builder mapping to SwiftUI `Text(_:style:)`, which WidgetKit re-renders itself.
+
+Reported as "the widget doesn't update daily". The write path was fine — `ScriptRunner` writes the
+App Group payload and calls `reloadAllTimelines()` after every run, and `backgroundTask` reschedules
+before running, so nothing was broken. The problem is structural: a widget tree is a **snapshot of
+strings frozen at run time**. A timeline reload re-reads the same JSON and re-renders the same stale
+text, because the extension has no JS engine and cannot recompute anything. So "3 sleeps" could only
+ever change when the script itself ran, and `BGAppRefreshTask` is opportunistic — iOS skips it for
+days at a time.
+
+`Text(date, style:)` is the platform's answer: the system re-renders it as the clock moves, with no
+timeline reload and no script run. Styles map straight through (`relative`/`date`/`time`/`timer`/
+`offset`), default `relative`.
+
+Scope worth remembering: this fixes the *text*, not the *data*. Which rows a widget shows and their
+order are still decided at run time, so a passed date counts upward until the next run. Two
+formatters for parsing because `ISO8601DateFormatter` rejects the fractional form it isn't
+configured for, and script-authored literals usually omit it. Unparsable → renders empty, never
+"now", which would be a confident wrong countdown.
+
+## Web sheet content rendered under the navigation bar — 2026-08-16
+Approach: `webView.scrollView.contentInsetAdjustmentBehavior = .always` in `LoomWebSheetController`.
+
+`webView.frame = view.bounds` spans the full sheet on purpose — content is meant to scroll under
+the glass nav bar. Nothing inset the scroll view for it, so every page's first ~56pt sat behind the
+bar with no way for the page to discover how much room to leave. Affected every web sheet ever
+written; no bundled example had worked around it, so the fix double-pads nothing.
+
+`.always` rather than the `.automatic` default: automatic declines when it can't identify the web
+view's scroll view as the controller's primary one, which is what was happening.
+
+Deliberately did *not* add an option to hide the nav bar. The Done button is the only reliable way
+out — swipe-to-dismiss alone strands anyone who has scrolled — and it would be a new JS-facing
+config key to work around a bug that's now fixed. Noted in `web-sheets.md` along with "don't add
+your own safe-area padding, and don't use viewport-fit=cover".
+
+## `Loom.contacts` reads birthdays and labelled dates — 2026-08-16
+Approach: two more `keysToFetch` keys, plus a nil predicate when no query is given.
+
+`search()` fetched only name/emails/phones/id, so birthdays were unreachable — and its predicate
+was always `matchingName:`, so there was no way to enumerate the address book at all. Both had to
+go for "who has a birthday soon" to be answerable.
+
+`birthday` and `dates` come back as `{month, day, year?}`, not ISO strings: Contacts stores
+`DateComponents`, and a year-less birthday is the common case with no point on the calendar to
+serialize. `birthday` is *omitted* rather than null when unset, so `if (c.birthday)` works.
+Read-only — `create`/`update` still ignore both.
+
+`search()` with no argument previously matched the literal name "undefined" (`JSValue.toString()`
+on undefined), so the no-arg call was already broken, just silently.
+
+## iOS 27 XL widget size (`.systemExtraLargePortrait`) — 2026-08-16
+Approach: fifth size key `extraLargePortrait`, falling back to `large` when a script doesn't declare it.
+
+The already-supported `extraLarge` is `.systemExtraLarge` — the iOS 15 iPad *landscape* family.
+iOS 27 adds `.systemExtraLargePortrait` (confirmed in `WidgetKit.swiftinterface`: `@available(iOS 27.0…)`),
+which was absent from `supportedFamilies` and hit `nodeForFamily`'s `default:` — rendering the
+*small* tree at full portrait-XL size.
+
+Fallback is `large`, not `extraLarge`: portrait XL is large's width at roughly double the height,
+so large is the near-match and landscape XL is the near-opposite aspect ratio. This also makes every
+widget payload already sitting in the App Group render correctly with no migration.
+
+The editor preview panel only shows an **XL Tall** tab when a script declares the key — with the
+fallback, an undeclared one would just duplicate the Large tab.
+
+Touched: `WidgetNode.swift` (field + parse + 2 self-checks), `LoomWidgetExtension.swift`
+(family + fallback), `ModuleBundler.swift` (JS size fan-out list), `WidgetPreviewPanel.swift`
+(364×786 preview), `widgets.md` (size table), `context.md`, `Examples/playground/main.ts`.
+
+## Siri never recognised any Loom phrase — the SSU training phase was never running — 2026-08-16
+Approach: added `Loom/AppShortcuts.strings`. One file, no code.
+
+Long-standing symptom: every spoken phrase failed, with Siri answering "I can't … in the Loom app".
+The App Shortcuts were correct the whole time and this was never a phrase-wording problem.
+
+`Metadata.appintents/extract.actionsdata` was always right — all four `autoShortcuts` present with
+`${applicationName}` in each template, `autoShortcutProviderMangledName` set,
+`updateAppShortcutParameters()` called from both `ProjectStore` and `SavedQueryStore`. What was
+missing sat one build phase later: **`AppIntentsSSUTraining` never ran**, so
+`appintentsnltrainingprocessor` never produced `root.ssu.yaml` or the `nlu/` assets, and Siri had no
+trained natural-language model to match against. Exported actions with no SSU assets are usable from
+the Shortcuts app and invisible to voice — which is exactly the behaviour we had.
+
+`AppIntentsNLTraining.xcspec` shows why: the phase's input dependency is `LM_STRINGS_FILE_PATH_LIST`
+(`--source-file`), populated from `AppShortcuts.strings`. With no such file the setting was unset
+entirely, the phase had no inputs, and Xcode skipped it silently — the only visible trace being
+`--no-app-shortcuts-localization` on the metadata processor. No error, no warning.
+
+Adding the file makes the phase run and train all four phrases plus the app name for `en`. The file
+is **not** about translation — Loom ships English only — and its header comment says so, because
+deleting it as dead weight silently breaks Siri again with no build failure.
+
+Not done, worth considering separately: `INAlternativeAppNames` in Info.plist for app-name synonyms,
+which only matters if "Loom" is mis-heard.
+
+## Live Activities start from Shortcuts and Siri without opening the app — 2026-08-16
+Approach: see [ADR-022 §5](../decisions/022-live-activities-layout-in-content-state.md), amended.
+
+`RunScriptIntent` and `RunScriptWithInputIntent` now conform to `LiveActivityIntent` instead of
+`AppIntent`. Two words. `LiveActivityIntent` is a strict refinement, so `supportedModes`,
+`@Parameter`, `parameterSummary`, `ReturnsValue<String?>` and the `AppShortcut` phrases are all
+untouched — and Shortcuts discoverability is unaffected, since `SystemIntent` doesn't override
+`isDiscoverable` (Loom's own `WidgetButtonIntent` proves it by opting *out* explicitly).
+
+The shipped ADR claimed a Shortcut could not start a Live Activity. Wrong: `Activity.request` is
+foreground-only *unless* the system is performing a `LiveActivityIntent`, in which case iOS launches
+the app process without opening the app. ADR-022 had already used that refinement for widget buttons
+and simply never joined it to the intents that run scripts. Timery and Apple's own Clock actions work
+the same way.
+
+The boundary that does hold, and is now written down rather than assumed: the privilege comes from
+the *system* performing the intent for the user. An unattended `BGAppRefreshTask` still throws
+`.visibility` even inside a `LiveActivityIntent` — no workaround short of APNs push-to-start, which
+needs a server. That distinction had been collapsed into "background can't start one" across seven
+files; all corrected.
+
+Also reworded `ActivityBridge`'s catch-block warning, which named a cause that is no longer the
+likely one.
+
+**Verification status: builds clean for device and iOS 27 simulator; the behaviour itself is
+unverified.** The simulator can't test it — running the "Run Script" action from Shortcuts there
+fails with "an internal error occurred" before the Loom process even launches. That is **not** this
+change: it reproduces identically on a build with both structs reverted to plain `AppIntent`, so it
+predates this work and is filed separately. Confirmed on the simulator either way: the action is
+still discoverable, the project parameter still resolves and presents a picker, and the "Open When
+Run" switch still renders — so the conformance did not cost discoverability or `supportedModes`.
+
+Still to check on a physical device: (1) Open When Run **on** still foregrounds Loom, since Apple DTS
+describes `LiveActivityIntent` as background-oriented and if that is a hard rule `IntentForeground`
+would silently stop working; (2) Open When Run **off** with a script calling `Loom.activity.start()`
+puts the activity on the Lock Screen without Loom appearing.
+
 ## API Playground — a smoke test of the whole bridge surface — 2026-08-11
 Approach: see [ADR-023](../decisions/023-playground-probe-label-is-catalog-path.md).
 

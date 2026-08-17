@@ -32,8 +32,8 @@ _Unified AI credentials + htmx web sheets + M7 pre-flight below. Examples overha
 
 <!-- Live Activities pre-flight archived — shipped 2026-08-10, see DONE.md and ADR-022. Kept only
      because the SDK research at the top (read from ActivityKit.swiftinterface, not the web) is
-     worth not re-deriving: Activity.activities as the registry, the 4 KB cap, the foreground
-     restriction on start, and isDynamicIslandLimitedInWidth being iOS 27.0-only.
+     worth not re-deriving: Activity.activities as the registry, the 4 KB cap, the restriction on
+     start, and isDynamicIslandLimitedInWidth being iOS 27.0-only.
 
 ## `Loom.activity` — Live Activities — pre-flight
 
@@ -78,7 +78,9 @@ stale and partly wrong about iOS 26+ signatures)
 
 1. **4 KB cap** on attributes + ContentState combined (`ActivityAuthorizationError.attributesTooLarge`).
    Layout travels *inside* ContentState, so this is the binding constraint, not a footnote.
-2. **Foreground required to start** (`.visibility`). Updates and ends work from the background.
+2. **A user-asked-for run required to start** (`.visibility` otherwise). Believed foreground-only
+   when this shipped; corrected 2026-08-16 — a `LiveActivityIntent` covers Shortcuts and Siri too.
+   Only an unattended background refresh genuinely cannot. Updates and ends work from anywhere.
 3. 8 h active, +4 h Lock Screen, then the system ends it regardless.
 4. `NSSupportsLiveActivities` was not set on the app target. Nothing would have worked without it.
 
@@ -202,12 +204,15 @@ await Loom.ai.complete(prompt, { provider: 'Nope' });        // throws — no su
 
 ## htmx web sheets — `Loom.ui.web()` — pre-flight
 
-> **Status: code complete, on-device verification pending.** Everything below is implemented and
-> the project builds clean; ADR-014 and the DONE.md entry are written. The serve loop was verified
-> pre-flight by extracting the exact `serveJS`/`loomCoreStub` literals and running 22 assertions
-> under node, but the app itself has **not been run** — no iOS 27 simulator runtime is installed
-> (only 26.3.1), and the deployment target is iOS 27. Run the manual checklist at the end of
-> `~/.claude/plans/help-me-plan-an-sprightly-flurry.md` before ticking this off.
+> **Status: shipped and verified.** An iOS 27 simulator runtime is now installed, and the sheet was
+> exercised end to end on 2026-08-17 while adding the chrome options below — page served, htmx
+> round-trip routed, both button and swipe dismissal resumed the run.
+>
+> **Amendment 2026-08-17 — configurable chrome.** `subtitle`, `button` (rename or `false` to remove)
+> and `bar: false` now join `title`; a `LoomWebChrome` struct carries them. The options object
+> crosses to Swift whole rather than as positional args, so the next option is a Swift-only change.
+> Sheet height stays `.large()` and a route handler still cannot dismiss the sheet — both deferred,
+> see the ADR-014 amendment. See DONE.md.
 
 Milestone: M7 — Background Tasks & Release Polish (ad-hoc request, lands alongside)
 Backlog item: n/a — user asked for "an htmx style web sheet view", a full page template populated by `main.ts`, `.html` files allowed and AI-generatable with editor-suggestion integration

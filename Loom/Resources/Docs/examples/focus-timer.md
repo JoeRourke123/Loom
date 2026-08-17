@@ -85,21 +85,22 @@ The script still claims the tap the way [Habit Rings](loom-doc://examples/habit-
 comparing `stop` against `seenStop` — because otherwise the timestamp from the last session would
 still be sitting in KV, and it would end every future session the instant it began.
 
-### Starting needs the foreground
+### Starting needs a run the user asked for
 
-**iOS only lets an app in the foreground start a Live Activity.** Updates and ends work from anywhere,
-but `start()` from a background refresh cannot work, and returns `null`:
+Tapping Run, a Shortcut, or a Siri phrase all count — a Shortcut works even with **Open When Run**
+off, so "Hey Siri, run Focus" starts the timer on the Lock Screen without Loom appearing. Updates and
+ends work from anywhere. Only a background refresh cannot start one, and there `start()` returns `null`:
 
 ```ts
 const key = await Loom.activity.start({ … });
 if (!key) {
   await Loom.notify.schedule({ title: 'Focus', body: 'Open Loom to start a session.' });
-  return { started: false, reason: 'not in the foreground' };
+  return { started: false, reason: 'could not start an activity' };
 }
 ```
 
-This is why the shape of the script is "foreground run starts it, background runs advance it" — the
-only shape iOS allows.
+This is why the shape of the script is "a run you asked for starts it, background runs advance it" —
+the only shape iOS allows.
 
 ### One function for every presentation
 
@@ -116,7 +117,7 @@ heading, and a button. `compactTrailing` gets `"12m"`, because that is genuinely
 - Reaching an activity from a **later, separate run** by key
 - Treating `list()` as the source of truth over your own stored state
 - `staleAfter` for content that goes out of date on its own
-- The foreground-only restriction on `start()`, and falling back when it bites
+- The restriction on `start()` from a background refresh, and falling back when it bites
 - `w.button` with `runsScript` for an action that has to take effect immediately
 - Claiming a button tap so an old one doesn't fire twice
 

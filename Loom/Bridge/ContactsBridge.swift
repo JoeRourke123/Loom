@@ -17,7 +17,9 @@ final class ContactsBridge {
 
         let searchBlock: @convention(block) (JSValue) -> JSValue = { [weak self] queryVal in
             guard let self else { return JSValue(undefinedIn: capturedCtx) }
-            let query = queryVal.toString() ?? ""
+            // `.toString()` on an undefined JSValue yields the literal "undefined", which would
+            // then be matched as a name — so the no-argument call has to be caught before that.
+            let query = (queryVal.isUndefined || queryVal.isNull) ? "" : (queryVal.toString() ?? "")
             return self.makePromise { resolve, reject in
                 self.store.requestAccess(for: .contacts) { granted, error in
                     if let error { reject(error.localizedDescription); return }
@@ -28,9 +30,14 @@ final class ContactsBridge {
                         CNContactEmailAddressesKey as CNKeyDescriptor,
                         CNContactPhoneNumbersKey as CNKeyDescriptor,
                         CNContactIdentifierKey as CNKeyDescriptor,
+                        CNContactBirthdayKey as CNKeyDescriptor,
+                        CNContactDatesKey as CNKeyDescriptor,
                     ]
                     let req = CNContactFetchRequest(keysToFetch: keys)
-                    req.predicate = CNContact.predicateForContacts(matchingName: query)
+                    // A nil predicate enumerates the whole address book. Without this there is no
+                    // way to ask "every contact with a birthday" — you'd have to already know the
+                    // names you were looking for, which defeats the point.
+                    req.predicate = query.isEmpty ? nil : CNContact.predicateForContacts(matchingName: query)
                     var results: [[String: Any]] = []
                     do {
                         try self.store.enumerateContacts(with: req) { contact, _ in
@@ -146,13 +153,33 @@ final class ContactsBridge {
 }
 
 private func contactDict(_ c: CNContact) -> [String: Any] {
-    [
+    var dict: [String: Any] = [
         "id":        c.identifier,
         "firstName": c.givenName,
         "lastName":  c.familyName,
         "emails":    c.emailAddresses.map { $0.value as String },
         "phones":    c.phoneNumbers.map { $0.value.stringValue },
+        "dates":     c.dates.compactMap { labeled -> [String: Any]? in
+            guard var d = dateDict(labeled.value as DateComponents) else { return nil }
+            d["label"] = labeled.label.map { CNLabeledValue<NSDateComponents>.localizedString(forLabel: $0) } ?? ""
+            return d
+        },
     ]
+    // Set only when present: NSNull would reach JS as an object, and `if (c.birthday)` is the
+    // check every script will reach for first.
+    if let birthday = dateDict(c.birthday) { dict["birthday"] = birthday }
+    return dict
+}
+
+// Contacts dates are DateComponents, not Dates, because a birthday very often has no year —
+// which is why this stays a {month, day, year?} object rather than being flattened to an ISO
+// string. A missing year is the common case, not an error, and inventing one would silently
+// turn "we don't know" into a wrong age.
+private func dateDict(_ components: DateComponents?) -> [String: Any]? {
+    guard let components, let month = components.month, let day = components.day else { return nil }
+    var out: [String: Any] = ["month": month, "day": day]
+    if let year = components.year { out["year"] = year }
+    return out
 }
 
 private func mutableContact(from fields: [String: Any]) -> CNMutableContact {

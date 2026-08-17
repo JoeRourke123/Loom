@@ -42,10 +42,11 @@ async function start(ctx) {
   });
 
   if (!key) {
-    // Only a foreground run can start an activity. A background refresh that lands here has
-    // nothing to advance, so it falls back to the surface that does work from the background.
-    await Loom.notify.schedule({ title: 'Focus', body: 'Open Loom to start a session.' });
-    return { started: false, reason: 'not in the foreground' };
+    // Tapping Run, a Shortcut and Siri can all start an activity; an unattended background refresh
+    // cannot. One that lands here has nothing to advance, so it falls back to the surface that does
+    // work from the background.
+    await Loom.notify.schedule({ title: 'Focus', body: 'Run Focus to start a session.' });
+    return { started: false, reason: 'could not start an activity' };
   }
 
   // Three numbers rather than one session object, deliberately: Loom.kv stores an object as a JSON

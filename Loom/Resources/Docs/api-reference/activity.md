@@ -72,14 +72,20 @@ Starts an activity. Resolves the key, or `null` if iOS declined.
 
 ### It can return null
 
-**iOS only lets an app in the foreground start a Live Activity.** A background refresh, and some Siri and Share Extension runs, cannot — `start()` writes a warning to the console and resolves `null`.
+**Starting a Live Activity needs a run the user asked for.** Three kinds qualify, and all of them work:
 
-Updates and ends have no such restriction, so the usual shape is: a foreground run starts the activity, and background runs keep it moving.
+- a run started in the app,
+- a Shortcut — including with **Open When Run** switched off, so Loom never comes to the foreground,
+- a Siri phrase.
+
+What does not qualify is an unattended wake-up: a background refresh, where iOS refuses no matter what. There `start()` writes a warning to the console and resolves `null`.
+
+Updates and ends have no such restriction at all, so a background refresh can keep moving an activity that any of the three started.
 
 ```ts
 const key = await Loom.activity.start({ key: 'deploy', content: … });
 if (!key) {
-  // Not running in the foreground — fall back to a notification
+  // A background refresh can't start one — fall back to a notification
   await Loom.notify.schedule({ title: 'Deploy started' });
 }
 ```

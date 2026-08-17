@@ -9,7 +9,8 @@ import Foundation
 // editor showed "Text 1" no matter what the script declared — and the slot counts were a hard
 // cap on how many inputs a project could accept. A single dictionary parameter drops both
 // problems. See IntentInputParser for what intent.inputs is still used for.
-struct RunScriptWithInputIntent: AppIntent {
+// LiveActivityIntent for the same reason as RunScriptIntent — see the note there.
+struct RunScriptWithInputIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Run Script with Input"
     static let description = IntentDescription("Runs a Loom project's script with a dictionary of input values.")
     // See RunScriptIntent — declaring both modes is what surfaces Shortcuts' "Open When Run".

@@ -62,3 +62,4 @@ What this creates, closes off, or requires going forward. Include trade-offs hon
 | 021 | [Intents declare both modes; Shortcuts' own switch decides](021-intent-foreground-modes.md) | accepted |
 | 022 | [Live Activities — layout in ContentState, `Activity.activities` as the registry](022-live-activities-layout-in-content-state.md) | accepted |
 | 023 | [The API Playground — one project, and the probe label is the catalog path](023-playground-probe-label-is-catalog-path.md) | accepted |
+| 024 | [Background tasks via SwiftUI's `.backgroundTask`, one identifier per task type](024-swiftui-background-task-modifier.md) | accepted |

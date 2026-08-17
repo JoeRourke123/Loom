@@ -26,8 +26,28 @@ struct WidgetResult {
     let medium: WidgetNode?
     let large: WidgetNode?
     let extraLarge: WidgetNode?
+    // iOS 27's .systemExtraLargePortrait — the iPhone XL size, and the biggest widget an iPhone
+    // home screen offers. large's width, ~1.45× its height (see WidgetPreviewPanel's measured
+    // note; it is NOT the 2×-large the name suggests). Separate from `extraLarge` (the iOS 15
+    // iPad landscape family) because the two are near-opposite aspect ratios; a layout built for
+    // one reads badly in the other.
+    let extraLargePortrait: WidgetNode?
     let refreshAfter: TimeInterval?
     let runOnTap: Bool
+
+    // True when any family's tree holds a `w.date` with `style: 'days'`. That style is the one
+    // thing a rendered entry can get wrong purely by sitting there, so the timeline provider uses
+    // this to decide whether to pre-render a week of midnights. Every other tree needs one entry.
+    var usesDayCountdown: Bool {
+        [small, medium, large, extraLarge, extraLargePortrait]
+            .compactMap { $0 }
+            .contains { Self.hasDayCountdown($0) }
+    }
+
+    private static func hasDayCountdown(_ node: WidgetNode) -> Bool {
+        if node.type == "date", node.props["style"] as? String == "days" { return true }
+        return node.children.contains { hasDayCountdown($0) }
+    }
 
     // loom://widget?script=…[&button=…] — the deep link a widget tap opens. Its own host rather
     // than `run` so the script sees ctx.trigger === 'widget', and so DeepLinkHandler can skip the
@@ -69,6 +89,7 @@ struct WidgetResult {
             medium: node(for: "medium"),
             large: node(for: "large"),
             extraLarge: node(for: "extraLarge"),
+            extraLargePortrait: node(for: "extraLargePortrait"),
             refreshAfter: refreshAfter,
             runOnTap: dict["runOnTap"] as? Bool ?? false
         )
@@ -112,6 +133,42 @@ struct WidgetResult {
             )
         }
 
+        // Day countdowns are counted midnight-to-midnight, so the answer must not depend on the
+        // time of day — 23:00 today to 01:00 tomorrow is one day, not zero. This is the whole
+        // reason the provider can schedule entries at midnight and trust the number to change.
+        let cal = Calendar.current
+        let today9 = cal.date(bySettingHour: 9, minute: 0, second: 0, of: Date())!
+        let today23 = cal.date(bySettingHour: 23, minute: 0, second: 0, of: Date())!
+        let tomorrow1 = cal.date(byAdding: .day, value: 1, to: cal.date(bySettingHour: 1, minute: 0, second: 0, of: Date())!)!
+        check("dayCount.sameDay", WidgetView.dayCount(from: today9, to: today23) == 0)
+        check("dayCount.acrossMidnight", WidgetView.dayCount(from: today23, to: tomorrow1) == 1)
+        check("dayCount.backwards", WidgetView.dayCount(from: tomorrow1, to: today23) == -1)
+        check("dayLabel.today", WidgetView.dayCountLabel(from: today9, to: today23) == "Today")
+        check("dayLabel.tomorrow", WidgetView.dayCountLabel(from: today23, to: tomorrow1) == "Tomorrow")
+        check("dayLabel.yesterday", WidgetView.dayCountLabel(from: tomorrow1, to: today23) == "Yesterday")
+        let inFour = cal.date(byAdding: .day, value: 4, to: today9)!
+        check("dayLabel.plural", WidgetView.dayCountLabel(from: today9, to: inFour) == "4 days")
+        check("dayLabel.past", WidgetView.dayCountLabel(from: inFour, to: today9) == "4 days ago")
+
+        // usesDayCountdown drives the midnight timeline, so it has to find a nested node, not just
+        // a root one — every real widget buries its countdown inside a row inside a stack.
+        let nested = WidgetNode.from([
+            "type": "vstack", "props": [:],
+            "children": [["type": "hstack", "props": [:], "children": [
+                ["type": "date", "props": ["style": "days"], "children": []],
+            ]]],
+        ])!
+        let plain = WidgetNode.from([
+            "type": "vstack", "props": [:],
+            "children": [["type": "date", "props": ["style": "relative"], "children": []]],
+        ])!
+        func result(_ node: WidgetNode) -> WidgetResult {
+            WidgetResult(small: node, medium: nil, large: nil, extraLarge: nil,
+                         extraLargePortrait: nil, refreshAfter: nil, runOnTap: false)
+        }
+        check("usesDayCountdown.nested", result(nested).usesDayCountdown)
+        check("usesDayCountdown.otherStyle", !result(plain).usesDayCountdown)
+
         let body = parsed(tapURL(projectName: "Reading List"))
         check("tapURL.host", body.host == "widget")
         check("tapURL.script", body.script == "Reading List")
@@ -129,6 +186,11 @@ struct WidgetResult {
         check("json.runOnTapDefaultsFalse", from(json: #"{"small":{"type":"text","props":{}}}"#)?.runOnTap == false)
         check("json.runOnTapTrue", from(json: #"{"runOnTap":true}"#)?.runOnTap == true)
         check("json.runOnTapFalse", from(json: #"{"runOnTap":false}"#)?.runOnTap == false)
+
+        // Payloads written before extraLargePortrait existed must parse to nil, not fail — the
+        // extension falls back to `large` for them.
+        check("json.portraitAbsent", from(json: #"{"large":{"type":"text","props":{}}}"#)?.extraLargePortrait == nil)
+        check("json.portraitPresent", from(json: #"{"extraLargePortrait":{"type":"text","props":{}}}"#)?.extraLargePortrait?.type == "text")
 
         if failures.isEmpty {
             print("[WidgetResult] self-check passed")

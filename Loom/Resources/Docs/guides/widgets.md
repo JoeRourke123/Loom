@@ -71,7 +71,7 @@ The widget function receives its own `ctx`:
 
 ## Composing the tree with w.*
 
-Loom ships 22 builder functions covering layout, content, data
+Loom ships 23 builder functions covering layout, content, data
 visualization, decoration, and interactive elements, in three call shapes:
 container builders that take `(children, props?)`, leaf builders that take a
 primary value plus `(props?)`, and prop-only builders that take just
@@ -276,6 +276,7 @@ export const widget = (ctx) => ({
   medium: w.hstack([...]),
   large: w.vstack([...]),
   extraLarge: w.vstack([...]),
+  extraLargePortrait: w.vstack([...]),
 });
 ```
 
@@ -283,6 +284,27 @@ Loom tells them apart by checking whether `tree.type` is a string — if it is,
 it's a single node and every size renders it. Otherwise it's a size map, and
 a key you leave out renders a placeholder in the extension rather than an
 error. Cover every size someone might plausibly add.
+
+The five sizes:
+
+| Key | Family | Shape |
+|-----|--------|-------|
+| `small` | `.systemSmall` | 2×2 square — iPhone and iPad |
+| `medium` | `.systemMedium` | 4×2 wide — iPhone and iPad |
+| `large` | `.systemLarge` | 4×4 square — iPhone and iPad |
+| `extraLarge` | `.systemExtraLarge` | 4×6 landscape — **iPad only** |
+| `extraLargePortrait` | `.systemExtraLargePortrait` | tall — **the iPhone XL size**, new in iOS 27 |
+
+`extraLargePortrait` is the biggest widget an iPhone home screen offers. It is
+`large`'s width and about 1.45× its height — 364×556 in this table's basis,
+measured off a 17 Pro Max at ~389×594. It is **not** the 2×-`large` the name
+suggests; assuming that ships a layout that overflows.
+
+`extraLargePortrait` is the one exception to the placeholder rule: leave it
+out and the extension renders your `large` tree instead, since the two share
+a width. Declare it only when the extra height deserves a different layout —
+more rows, a taller chart. The editor's preview panel only shows an **XL
+Tall** tab when you declare it; otherwise the **Large** tab is the preview.
 
 ## Setting a refresh interval
 

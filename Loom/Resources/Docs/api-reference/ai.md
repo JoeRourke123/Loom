@@ -42,6 +42,47 @@ const text = await Loom.ai.complete(
 
 If `opts` is missing or not an object, it's treated as `{}` — no error is thrown. Resolves to the plain text response.
 
+## Loom.ai.completeAll()
+
+Runs many completions **concurrently**, resolving an array in the same order as the prompts.
+
+```ts
+Loom.ai.completeAll(
+  prompts: string[],
+  opts?: { provider?: 'apple' | (string & {}); maxTokens?: number; instructions?: string; model?: string }
+): Promise<{ text: string; error: string }[]>
+```
+
+`opts` is the same object `complete()` takes, applied to every prompt in the batch.
+
+`complete()` blocks the script thread until the model replies, so `Promise.all` over several of
+them still runs serially — the promises are already settled by the time `Promise.all` sees them.
+Measured against `gpt-oss:120b`: seven 320-word sections took **67s** one at a time and **20s**
+through `completeAll`. See ADR-025 for why the promise model is shaped that way.
+
+```ts
+const results = await Loom.ai.completeAll(
+  sections.map((s) => buildPrompt(s)),
+  { provider: 'Ollama', model: 'gpt-oss:120b', maxTokens: 6000, instructions: role },
+);
+
+results.forEach((r, i) => {
+  if (r.error) Loom.log.warn(`section ${i}: ${r.error}`);
+  else sections[i].body = r.text;
+});
+```
+
+### Limits and failures
+
+At most **64 prompts** per call, **8 in flight**. Going over 64 rejects the call.
+
+A prompt that fails does **not** reject the batch — its element comes back with an empty `text` and
+a non-empty `error`, so the completions that did succeed are kept. This differs from `complete()`,
+which rejects. Check `error` on every element.
+
+There is no `chatAll`. Batch a multi-turn case by folding the history into one prompt, or call
+`chat()` in a loop and accept the serial cost.
+
 ## Loom.ai.chat()
 
 ```ts

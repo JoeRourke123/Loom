@@ -132,6 +132,8 @@ struct WidgetPreviewPanel: View {
         if result.medium != nil     { sizes.append(.medium) }
         if result.large != nil      { sizes.append(.large) }
         if result.extraLarge != nil { sizes.append(.extraLarge) }
+        // No tab when only the `large` fallback would render — the Large tab already shows it.
+        if result.extraLargePortrait != nil { sizes.append(.extraLargePortrait) }
         return sizes
     }
 
@@ -141,6 +143,7 @@ struct WidgetPreviewPanel: View {
         case .medium:     return result.medium
         case .large:      return result.large
         case .extraLarge: return result.extraLarge
+        case .extraLargePortrait: return result.extraLargePortrait
         }
     }
 }
@@ -148,33 +151,39 @@ struct WidgetPreviewPanel: View {
 // MARK: - Preview Size
 
 enum PreviewSize: String, CaseIterable {
-    case small, medium, large, extraLarge
+    case small, medium, large, extraLarge, extraLargePortrait
 
     var label: String {
         switch self {
-        case .small:      return "Small"
-        case .medium:     return "Medium"
-        case .large:      return "Large"
-        case .extraLarge: return "XL"
+        case .small:              return "Small"
+        case .medium:             return "Medium"
+        case .large:              return "Large"
+        case .extraLarge:         return "XL"
+        case .extraLargePortrait: return "XL Tall"
         }
     }
 
     // Standard WidgetKit dimensions (points).
     var width: CGFloat {
         switch self {
-        case .small:      return 170
-        case .medium:     return 364
-        case .large:      return 364
-        case .extraLarge: return 726
+        case .small:              return 170
+        case .medium:             return 364
+        case .large:              return 364
+        case .extraLarge:         return 726
+        case .extraLargePortrait: return 364
         }
     }
 
     var height: CGFloat {
         switch self {
-        case .small:      return 170
-        case .medium:     return 170
-        case .large:      return 382
-        case .extraLarge: return 382
+        case .small:              return 170
+        case .medium:             return 170
+        case .large:              return 382
+        case .extraLarge:         return 382
+        // Measured off a 17 Pro Max (~389×594 there), scaled to this table's 364pt width basis.
+        // Not the 2×-large it looks like on paper — guessing that made the preview a third
+        // taller than the real family, which is exactly how a layout ships overflowing.
+        case .extraLargePortrait: return 556
         }
     }
 }

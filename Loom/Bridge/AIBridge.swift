@@ -12,6 +12,11 @@ import FoundationModels
 final class AIBridge {
     private let ctx: JSContext
 
+    // Matches NetworkBridge's caps — see ADR-025. nonisolated because the TaskGroup fan-out runs
+    // off the main actor; without it these are an error under the Swift 6 language mode.
+    nonisolated static let maxInFlight = 8
+    nonisolated static let maxBatch = 64
+
     nonisolated init(ctx: JSContext) {
         self.ctx = ctx
     }
@@ -64,9 +69,54 @@ final class AIBridge {
             }
         }
 
-        obj.setObject(completeBlock, forKeyedSubscript: "complete" as NSString)
-        obj.setObject(chatBlock,     forKeyedSubscript: "chat"     as NSString)
-        obj.setObject(searchBlock,   forKeyedSubscript: "search"   as NSString)
+        // completeAll(prompts, opts?) → Promise<{text, error}[]>
+        //
+        // makePromise blocks the script thread, so N sequential complete() calls cost the sum of
+        // their latencies and Promise.all cannot recover it — the promises are already settled by
+        // the time it sees them (ADR-025). One wait covers the whole batch here instead.
+        // Measured on gpt-oss:120b: 7 completions, 67s sequential → 20s this way.
+        //
+        // Every element resolves. A prompt that fails carries its error string rather than
+        // rejecting the batch and discarding the completions that did succeed.
+        let completeAllBlock: @convention(block) (JSValue, JSValue) -> JSValue = { [weak self] promptsVal, optsVal in
+            guard let self else { return JSValue(undefinedIn: capturedCtx) }
+            let prompts = (promptsVal.toArray() as? [String]) ?? []
+            let opts = optsVal.isObject ? (optsVal.toDictionary() as? [String: Any] ?? [:]) : [:]
+            return self.makePromise { resolve, reject in
+                guard !prompts.isEmpty else { resolve([Any]()); return }
+                guard prompts.count <= Self.maxBatch else {
+                    reject("Loom.ai.completeAll: \(prompts.count) prompts exceeds the limit of \(Self.maxBatch)")
+                    return
+                }
+                Task.detached {
+                    var out = [[String: Any]](
+                        repeating: ["text": "", "error": ""], count: prompts.count
+                    )
+                    await withTaskGroup(of: (Int, String, String).self) { group in
+                        var next = 0
+                        // Hand-rolled window rather than adding all N at once: an unbounded fan-out
+                        // at a provider is how a script earns a 429 for the whole batch.
+                        func addTask(_ index: Int) {
+                            group.addTask {
+                                do { return (index, try await self.complete(prompt: prompts[index], opts: opts), "") }
+                                catch { return (index, "", error.localizedDescription) }
+                            }
+                        }
+                        while next < min(Self.maxInFlight, prompts.count) { addTask(next); next += 1 }
+                        for await (index, text, err) in group {
+                            out[index] = ["text": text, "error": err]
+                            if next < prompts.count { addTask(next); next += 1 }
+                        }
+                    }
+                    resolve(out)
+                }
+            }
+        }
+
+        obj.setObject(completeBlock,    forKeyedSubscript: "complete"    as NSString)
+        obj.setObject(completeAllBlock, forKeyedSubscript: "completeAll" as NSString)
+        obj.setObject(chatBlock,        forKeyedSubscript: "chat"        as NSString)
+        obj.setObject(searchBlock,      forKeyedSubscript: "search"      as NSString)
         return obj
     }
 

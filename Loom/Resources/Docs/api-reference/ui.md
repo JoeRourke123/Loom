@@ -95,6 +95,9 @@ Loom.ui.web(options: {
   template?: string;
   html?: string;
   title?: string;
+  subtitle?: string;
+  button?: string | false;
+  bar?: boolean;
   routes: Record<string, (req) => string | Promise<string>>;
 }): Promise<void>
 ```
@@ -104,7 +107,12 @@ Loom.ui.web(options: {
 | `template` | `string` | Filename of an `.html` file in the project folder. No subfolders, no leading dot, cannot escape the folder. |
 | `html` | `string` | An inline page, used instead of `template`. Takes precedence if both are given. |
 | `title` | `string` | Navigation-bar title. Defaults to `""`. |
+| `subtitle` | `string` | Second line under the title. Fixed for the sheet's lifetime. |
+| `button` | `string \| false` | Dismiss-button label. Defaults to a system **Done**; `false` removes it. |
+| `bar` | `boolean` | `false` hides the navigation bar entirely, so the page owns the full sheet. Defaults to `true`. |
 | `routes` | `Record<string, Function>` | Keys are `"METHOD /path"` or `"/path"`. Matched exactly — the method-prefixed key is tried first, then the bare path. |
+
+Only a literal `false` removes the button or the bar — any other value leaves the default in place. With either gone, swipe-to-dismiss is the only exit, so Loom shows the sheet's grabber. `title`, `subtitle` and `button` are inert when `bar: false`.
 
 Returns `Promise<void>`, resolving only when the user dismisses the sheet.
 

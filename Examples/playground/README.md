@@ -24,6 +24,11 @@ A run prompts for which suite you want:
 `loom://run?script=API%20Playground&only=health` can target one suite directly. With no window at
 all — a background or share-triggered run — the prompt resolves to `""` and the safe set runs.
 
+The result carries `trigger` alongside the counts, so a run you did not start by hand identifies
+itself on its Run History row. This project declares both background trigger flags, which makes it
+the quickest check that background execution is working at all: leave it scaffolded, and a
+`backgroundRefresh` row with a passing safe set means the whole path fired.
+
 ## The two flags
 
 Both live at the top of `probe.ts`, both default to `false`, and each is one line to flip.
@@ -53,8 +58,8 @@ A few ❌ rows are normal and not your fault:
 
 - `device.batteryLevel` is `null` on the simulator.
 - The whole `ai` suite throws `modelUnavailable` where the on-device model can't run.
-- `activity.start` resolves `null` from a background run — iOS only allows a foreground start —
-  and needs Live Activities enabled for Loom in Settings.
+- `activity.start` resolves `null` from an unattended background refresh — only a run the user asked
+  for can start one — and needs Live Activities enabled for Loom in Settings.
 - `health.*` returns empty arrays on a device with no Health data rather than failing.
 
 ## Keeping it current

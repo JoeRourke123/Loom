@@ -143,7 +143,8 @@ Differences from the handler's `ctx`:
   above.
 - **There is no `widgetSize`.** The widget function is called once per run,
   not once per size. To vary the layout, return a
-  `{ small, medium, large, extraLarge }` map instead of a single node.
+  `{ small, medium, large, extraLarge, extraLargePortrait }` map instead of a
+  single node.
 
 ## See Also
 

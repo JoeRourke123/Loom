@@ -1,0 +1,15 @@
+/* App Shortcut phrases.
+
+   This file is not here for translation — Loom ships English only. It is here because its presence
+   is what makes Xcode run the AppIntentsSSUTraining build phase (appintentsnltrainingprocessor),
+   which is what trains Siri's spoken-phrase model from the templates in LoomShortcuts. Without it,
+   `LM_STRINGS_FILE_PATH_LIST` is empty, the phase is skipped, no root.ssu.yaml is produced, and
+   Siri answers "I can't do that in the Loom app" for every phrase — even though the actions are
+   correctly exported in Metadata.appintents and work fine in the Shortcuts app.
+
+   Keys must match the phrases in LoomShortcuts.appShortcuts exactly. */
+
+"Run ${project} in ${applicationName}" = "Run ${project} in ${applicationName}";
+"Run ${project} with input in ${applicationName}" = "Run ${project} with input in ${applicationName}";
+"Run ${query} in ${applicationName}" = "Run ${query} in ${applicationName}";
+"Search ${applicationName} logs" = "Search ${applicationName} logs";

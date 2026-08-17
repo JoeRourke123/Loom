@@ -73,6 +73,9 @@ supports.
 | `template` | `string` | Filename of an `.html` file in the project folder. No subfolders, no leading dot. |
 | `html` | `string` | An inline page, used instead of `template`. If both are given, `html` wins. |
 | `title` | `string` | Navigation-bar title. Defaults to empty. |
+| `subtitle` | `string` | A second, smaller line under the title. Fixed for the sheet's lifetime — no route can change it. |
+| `button` | `string \| false` | Label for the dismiss button. Defaults to a system **Done**; `false` removes the button. |
+| `bar` | `boolean` | `false` hides the navigation bar entirely. Defaults to `true`. |
 | `routes` | `Record<string, Function>` | Path → handler. See below. |
 
 One of `template` or `html` must resolve to something readable, or the call
@@ -157,6 +160,55 @@ html`<ul>${items.map(i => html`<li>${i.name}</li>`)}</ul>`
 ```
 
 `i.name` is escaped; the `<li>` wrappers are not.
+
+## Layout and the navigation bar
+
+By default the sheet has a navigation bar — your `title`, an optional
+`subtitle`, and a Done button — and the page scrolls underneath it. Loom insets
+the scroll view for the bar and the home indicator, so **your page should not
+add top or bottom safe-area padding of its own** — a plain `padding` is enough,
+and `env(safe-area-inset-*)` on top of it double-counts.
+
+For the same reason, don't set `viewport-fit=cover`. The default viewport is
+what makes the insets line up:
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1">
+```
+
+### Changing the bar
+
+Rename the dismiss button, or drop it:
+
+```ts
+await Loom.ui.web({
+  template: 'index.html',
+  title: 'Pantry',
+  subtitle: '12 items expiring',
+  button: 'Close',        // or false — no button at all
+  routes,
+})
+```
+
+Hide the bar completely with `bar: false`. The page then owns the full sheet
+and draws its own header, if it wants one:
+
+```ts
+await Loom.ui.web({ template: 'index.html', bar: false, routes })
+```
+
+**Know what you are giving up.** The dismiss button is the only *reliable* way
+out of a sheet — swipe-to-dismiss alone strands anyone who has scrolled down,
+because the gesture is only recognised near the top of the page. Whenever the
+button is gone (`button: false` or `bar: false`) Loom shows the sheet's grabber
+to advertise the swipe, but that is a hint, not a fix. If you hide the bar, keep
+the page short, or give it its own way back to the top.
+
+`title`, `subtitle` and `button` are inert when `bar: false` — there is nothing
+left to draw them in. Loom does not warn; the sheet just opens bare.
+
+The page still gets a top inset for the status bar with the bar hidden, so the
+advice above holds either way: no `env(safe-area-inset-*)` of your own.
 
 ## htmx itself
 

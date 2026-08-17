@@ -41,6 +41,39 @@ export async function aiSuite() {
       return out.length === 0 ? '[] without calling the model, as documented' : JSON.stringify(out);
     }),
 
+    await probe('ai.completeAll', async () => {
+      const out = await Loom.ai.completeAll(
+        ['Reply with exactly: one', 'Reply with exactly: two', 'Reply with exactly: three'],
+        { provider: PROVIDER, maxTokens: 16 },
+      );
+      // Positional, and every element resolves — a failed prompt carries `error` rather than
+      // rejecting the batch, which is the opposite of how complete() behaves.
+      return out.map((r, i) => `[${i}] ${r.error ? `ERR ${r.error.slice(0, 30)}` : r.text.trim().slice(0, 20)}`).join(' | ');
+    }),
+
+    // The failure contract, exercised deliberately: an unusable provider must still resolve an
+    // array of per-element errors. If this rejects instead, a caller loses the prompts that worked.
+    await probe('ai.completeAll (failure does not reject the batch)', async () => {
+      const out = await Loom.ai.completeAll(['hello', 'world'], { provider: 'not-a-configured-provider' });
+      if (out.length !== 2) throw new Error(`expected 2 elements, got ${out.length}`);
+      if (!out[0].error) throw new Error('expected a per-element error, got a clean result');
+      return `resolved 2 elements, both carrying: "${String(out[0].error).slice(0, 44)}"`;
+    }),
+
+    await probe('ai.completeAll (empty array)', async () => {
+      const out = await Loom.ai.completeAll([], { provider: PROVIDER });
+      return out.length === 0 ? '[] without calling the model' : `unexpected: ${out.length}`;
+    }),
+
+    await probe('ai.completeAll (over 64 must reject)', async () => {
+      try {
+        await Loom.ai.completeAll(Array.from({ length: 65 }, () => 'hi'), { provider: PROVIDER });
+      } catch (err) {
+        return `rejected as expected: ${(err as any)?.message ?? err}`;
+      }
+      throw new Error('65 prompts were accepted — the batch cap is not enforced');
+    }),
+
     await probe('ai.complete (unknown provider)', async () => {
       try {
         const out = await Loom.ai.complete('hello', { provider: 'not-a-configured-provider' });

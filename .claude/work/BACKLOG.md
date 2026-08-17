@@ -72,7 +72,7 @@ Each namespace below is a separate implementation task.
 - [ ] **Widget App Intent — button/toggle actions** — lightweight intent handler (no JSC) that writes to App Group container then calls `WidgetCenter.reloadTimelines()`. Optional `runsScript: true` path for full script execution.
 - [ ] **`Loom.widget.setState(key, value)`** — write to App Group container from inside a running script for toggle persistence.
 - [ ] **Widget configuration via App Intents** — optional `configIntent` in `widget.ts` `loom()` options. Expose `ctx.widgetConfig` with user-selected values. `ctx.widgetSize` for size-adaptive layouts.
-- [ ] **Widget size support** — small (2×2), medium (4×2), large (4×4), extraLarge (4×6, iOS 27).
+- [x] **Widget size support** — small (2×2), medium (4×2), large (4×4), extraLarge (4×6 landscape), extraLargePortrait (tall, iOS 27).
 
 ---
 

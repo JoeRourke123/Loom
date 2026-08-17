@@ -28,9 +28,9 @@ for (const c of results) {
 
 | Name | Type | Description |
 |------|------|-------------|
-| `query` | `string` | Name to match against contacts. |
+| `query` | `string` (optional) | Name to match against contacts. Omit it (or pass `''`) to enumerate **every** contact. |
 
-`query` is matched with `CNContact.predicateForContacts(matchingName:)` — a substring/name match, not a raw predicate or query language.
+`query` is matched with `CNContact.predicateForContacts(matchingName:)` — a substring/name match, not a raw predicate or query language. With no query the predicate is dropped entirely and the whole address book is enumerated, which is how you ask a question like "everyone with a birthday this month".
 
 Returns `Promise<ContactRecord[]>`.
 
@@ -43,8 +43,32 @@ Returns `Promise<ContactRecord[]>`.
 | `lastName` | `string` | Family name. |
 | `emails` | `string[]` | Email addresses. |
 | `phones` | `string[]` | Phone numbers. |
+| `birthday` | `PartialDate` (optional) | **Absent entirely** when the contact has no birthday set — test with `if (c.birthday)`. |
+| `dates` | `PartialDate[]` | Other labelled dates (anniversaries and so on). Always an array; empty when there are none. |
 
-**Limitations:** the fetched fields are fixed to given name, family name, emails, phones, and identifier. Nothing else is retrievable through Loom — no postal addresses, organization, birthday, or contact image.
+**`PartialDate` shape:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `month` | `number` | 1–12. Always present. |
+| `day` | `number` | 1–31. Always present. |
+| `year` | `number` (optional) | **Frequently absent** — a birthday with no year is normal, not an error. |
+| `label` | `string` | On `dates` entries only, localized (`"Anniversary"`). `''` when unlabelled. |
+
+Contacts store these as date *components*, not timestamps, which is why they aren't ISO strings: a year-less birthday has no point on the calendar to serialize. Guard on `year` before computing an age.
+
+```ts
+const all = await Loom.contacts.search();
+const withBirthdays = all.filter((c) => c.birthday);
+for (const c of withBirthdays) {
+  const age = c.birthday.year ? new Date().getFullYear() - c.birthday.year : null;
+  Loom.log.info(`${c.firstName} — ${c.birthday.day}/${c.birthday.month}`, { age });
+}
+```
+
+**Limitations:** the fetched fields are fixed to given name, family name, emails, phones, identifier, birthday, and dates. Nothing else is retrievable through Loom — no postal addresses, organization, or contact image. Enumerating every contact is a full address-book walk on the script thread; on a large address book that is not instant.
+
+`birthday` and `dates` are **read-only**. `create()` and `update()` ignore them — passing a record straight back to `update()` silently drops both fields rather than erroring.
 
 ## `Loom.contacts.create()`
 

@@ -12,13 +12,13 @@ import { w } from '@loom/widget';
 
 ## Call signature shapes
 
-The 22 builders share three call shapes:
+The 23 builders share three call shapes:
 
 1. **Children + props** — `w.vstack(children, props?)`. Takes an array of child nodes and an optional props object.
 2. **Value + props** — `w.text(value, props?)`. If the first argument is an object, it is used verbatim as the full props object. Otherwise it's coerced to a string and merged into the primary field (`content`, `url`, or `name` depending on the builder), with an optional second props object.
 3. **Props only** — `w.spacer(props?)`. No children, no primary value.
 
-None of the 22 builders throws or validates its arguments. A `w.*` call can never fail in JavaScript — missing, malformed, or out-of-range props are silently defaulted or clamped on the Swift side at render time, not surfaced as script errors.
+None of the 23 builders throws or validates its arguments. A `w.*` call can never fail in JavaScript — missing, malformed, or out-of-range props are silently defaulted or clamped on the Swift side at render time, not surfaced as script errors.
 
 ---
 
@@ -125,6 +125,48 @@ w.text({ content: 'Hello', font: 'title2', bold: true })
 | `color` | `string` | Widget color name. |
 | `lineLimit` | `number` | Max number of lines. Omitted → unlimited. |
 
+### `w.date`
+
+A text run bound to a date, formatted and **kept up to date by WidgetKit itself**.
+
+```ts
+w.date('2026-08-22T00:00:00.000Z', { style: 'relative', font: 'caption' })
+// or, props-only form:
+w.date({ value: '2026-08-22T00:00:00.000Z', style: 'date' })
+```
+
+| Name | Type | Description |
+|---|---|---|
+| `value` | `string` | ISO8601 date. Primary field when the first argument is a string. With or without fractional seconds. |
+| `style` | `string` | `'relative'` (default) \| `'days'` \| `'date'` \| `'time'` \| `'timer'` \| `'offset'`. |
+| `font` | `string` | Widget font name. |
+| `bold` | `boolean` | Default `false`. |
+| `alignment` | `string` | `'leading'` \| `'trailing'` \| anything else → center. |
+| `color` | `string` | Widget color name. |
+| `lineLimit` | `number` | Max number of lines. |
+
+**This is the only node whose content changes without the script re-running.** Every other node is frozen at the moment your script produced it, and the widget will keep showing that snapshot until something runs the script again — a manual run, a widget tap with `runOnTap`, or an opportunistic `backgroundRefresh` that iOS may skip for days. A countdown built with `w.text` goes stale overnight; the same countdown built with `w.date` does not.
+
+Note that this fixes the *text*, not the *data*. Which items your widget lists, and what order they're in, were still decided at run time — if a date passes, `w.date` will happily count up from it until the script next runs.
+
+An unparsable or missing `value` renders as empty rather than falling back to the current time, which would show a confident but wrong countdown.
+
+**Picking a style.** Four of the five are Apple's own auto-updating text styles; `'days'` is Loom's.
+
+| `style` | Renders | Updates |
+|---|---|---|
+| `'relative'` | `4 days, 11 hrs` | continuously |
+| `'days'` | `4 days` — also `Today`, `Tomorrow`, `Yesterday`, `4 days ago` | at midnight |
+| `'offset'` | `−4 days` | continuously |
+| `'timer'` | `107:59:12` | continuously |
+| `'date'` | `21 August 2026` | never — it's a fixed date |
+
+`'relative'` always shows **two** units, which is fine in a wide row and wraps in a narrow one. There is no way to make it show one: that is Apple's formatting, not a Loom setting. `'offset'` is the single-unit auto-updating option, but it is signed, so a future date reads `−4 days`.
+
+`'days'` exists because a whole-day countdown is the common case and none of Apple's styles can render one unsigned. Loom counts calendar days — midnight to midnight, so 23:00 tonight to 01:00 tomorrow is `Tomorrow`, not `Today` — and the widget provider pre-renders one timeline entry per midnight for the next week. The number therefore changes at midnight without your script running, the same guarantee the other styles give, just at day resolution instead of continuous.
+
+Use `'days'` for anything counted in sleeps and `'relative'` or `'timer'` when hours and minutes genuinely matter.
+
 ### `w.label`
 
 Fixed layout: an SF Symbol paired with a title/subtitle text stack.
@@ -158,6 +200,21 @@ w.image({ url: 'https://example.com/photo.jpg' })
 | `cornerRadius` | `number` | Default `0`. |
 | `width` | `number` | Frame width. |
 | `height` | `number` | Frame height. |
+
+Loom downloads the image into the shared App Group at the end of the run and rewrites the URL to a
+local file, so the widget extension reads it synchronously off disk. That is not an optimisation —
+WidgetKit renders a timeline entry to a **static snapshot**, so an `AsyncImage` load never finishes
+before the snapshot is taken and a genuinely remote URL would be the placeholder forever. A grey
+box, on every device.
+
+Consequences worth knowing:
+
+- The first run after an image URL changes spends up to 8s fetching (capped, 4 at a time). Images
+  already cached cost nothing, and anything that misses the deadline is left remote and picked up
+  on the next run.
+- Only images referenced by the current payload are kept; the rest are pruned each write.
+- The in-app preview panel renders live rather than as a snapshot, so a remote URL *does* resolve
+  there. A widget that looks right in the preview and grey on the home screen is this difference.
 
 While loading, the placeholder is a flat `Color(.secondarySystemBackground)` — no spinner.
 

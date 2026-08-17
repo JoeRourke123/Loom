@@ -2,6 +2,14 @@ import SwiftUI
 import Charts
 import AppIntents
 
+// The moment a tree is being rendered *for*, which is not the same as the moment it is rendered.
+// WidgetKit builds every timeline entry ahead of time, so a view that wants to say "4 days" has
+// to count from the entry's own date — reading Date() would stamp all of them with build time.
+// Defaults to now, which is right for the in-app preview and for Live Activities.
+extension EnvironmentValues {
+    @Entry var loomRenderDate: Date = Date()
+}
+
 // Shared SwiftUI renderer for WidgetNode trees.
 // Used in the main app's in-app preview panel and (as shared source) in the widget extension.
 // .containerBackground() is applied by the caller (extension entry view or preview host).
@@ -10,6 +18,8 @@ struct WidgetView: View {
     // Set to the project name in the widget extension to enable Button(intent:) rendering.
     // Leave empty (default) in the main app preview for visual-only static rendering.
     var projectName: String = ""
+
+    @Environment(\.loomRenderDate) private var renderDate
 
     var body: some View {
         render(node)
@@ -25,6 +35,7 @@ struct WidgetView: View {
         case "spacer":      return AnyView(spacerView(node))
         case "divider":     return AnyView(dividerView(node))
         case "text":        return AnyView(textView(node))
+        case "date":        return AnyView(dateView(node))
         case "label":       return AnyView(labelView(node))
         case "image":       return AnyView(imageView(node))
         case "icon":        return AnyView(iconView(node))
@@ -105,6 +116,81 @@ struct WidgetView: View {
             .lineLimit(node.props["lineLimit"] as? Int)
     }
 
+    // The only node whose content changes without the script re-running. Text(_:style:) is
+    // re-rendered by WidgetKit itself as the clock moves, so a countdown stays honest between
+    // runs — everything else in a tree is frozen at the moment the script produced it, and a
+    // background refresh is best-effort, not daily.
+    //
+    // An unparsable or missing value renders empty rather than falling back to "now", which
+    // would silently show a confident wrong countdown.
+    private func dateView(_ node: WidgetNode) -> some View {
+        let date = Self.isoDate(node.props["value"] as? String)
+        let raw = node.props["style"] as? String
+
+        let style: Text.DateStyle = switch raw {
+        case "date":   .date
+        case "time":   .time
+        case "timer":  .timer
+        case "offset": .offset
+        default:       .relative
+        }
+
+        return Group {
+            if let date {
+                // 'days' is ours, not one of Apple's Text.DateStyle cases: none of those can say
+                // "4 days" without either a second unit or a sign. Counting calendar days here
+                // costs the automatic re-render, so the provider schedules an entry per midnight
+                // instead — which is exactly when a whole-day countdown changes.
+                if raw == "days" {
+                    Text(Self.dayCountLabel(from: renderDate, to: date))
+                } else {
+                    Text(date, style: style)
+                }
+            } else {
+                Text("")
+            }
+        }
+        .font(widgetFont(node.props["font"] as? String))
+        .bold(node.props["bold"] as? Bool ?? false)
+        .multilineTextAlignment(textAlign(node.props["alignment"] as? String))
+        .foregroundStyle(widgetColor(node.props["color"] as? String))
+        .lineLimit(node.props["lineLimit"] as? Int)
+    }
+
+    // Two formatters because ISO8601DateFormatter is exact about fractional seconds: the one
+    // that accepts "…:00.000Z" rejects "…:00Z" and vice versa. Loom's own bridges emit the
+    // fractional form, but a hand-written literal in a script usually won't.
+    private static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let isoPlain = ISO8601DateFormatter()
+
+    // Whole calendar days between two instants — midnight to midnight, not 24-hour chunks. A
+    // birthday at 00:00 tomorrow is "Tomorrow" whether it is now 09:00 or 23:00, which is what
+    // anyone reading a countdown means, and it is what makes the value flip exactly at midnight.
+    static func dayCount(from: Date, to: Date) -> Int {
+        let cal = Calendar.current
+        return cal.dateComponents([.day], from: cal.startOfDay(for: from), to: cal.startOfDay(for: to)).day ?? 0
+    }
+
+    static func dayCountLabel(from: Date, to: Date) -> String {
+        switch dayCount(from: from, to: to) {
+        case 0:            "Today"
+        case 1:            "Tomorrow"
+        case -1:           "Yesterday"
+        case let n where n > 0:  "\(n) days"
+        case let n:        "\(-n) days ago"
+        }
+    }
+
+    static func isoDate(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        return isoFractional.date(from: raw) ?? isoPlain.date(from: raw)
+    }
+
     private func labelView(_ node: WidgetNode) -> some View {
         let icon = node.props["icon"] as? String ?? "questionmark"
         let title = node.props["title"] as? String ?? ""
@@ -122,17 +208,37 @@ struct WidgetView: View {
         }
     }
 
+    // A widget is rendered to a static snapshot, so AsyncImage never finishes loading and the
+    // placeholder is what gets captured — a grey box, permanently. WidgetImageCache downloads the
+    // bytes into the App Group during the run and rewrites the URL to a local path, so the common
+    // case here is a synchronous read that is already on disk.
+    //
+    // AsyncImage is kept for the remaining case: the in-app preview panel, which renders live in a
+    // real view hierarchy where it does resolve, and any payload written before the cache existed.
+    @ViewBuilder
     private func imageView(_ node: WidgetNode) -> some View {
         let url = node.props["url"] as? String ?? ""
         let radius = cgf(node.props["cornerRadius"]) ?? 0
+        let width = cgf(node.props["width"])
+        let height = cgf(node.props["height"])
 
-        return AsyncImage(url: URL(string: url)) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
-            Color(.secondarySystemBackground)
+        if url.hasPrefix("/"), let local = UIImage(contentsOfFile: url) {
+            Image(uiImage: local)
+                .resizable()
+                .scaledToFill()
+                .frame(width: width, height: height)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: radius))
+        } else {
+            AsyncImage(url: URL(string: url)) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Color(.secondarySystemBackground)
+            }
+            .frame(width: width, height: height)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: radius))
         }
-        .frame(width: cgf(node.props["width"]), height: cgf(node.props["height"]))
-        .clipShape(RoundedRectangle(cornerRadius: radius))
     }
 
     private func iconView(_ node: WidgetNode) -> some View {

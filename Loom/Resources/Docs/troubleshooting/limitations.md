@@ -50,6 +50,20 @@ export default loom(async (ctx) => {
 
 Write your own exit conditions. Don't rely on the platform to stop a script for you.
 
+## Background runs are opportunities, not a schedule
+
+`triggers.backgroundRefresh` and `triggers.backgroundProcessing` work, but iOS decides when — and whether — they fire. There is no fixed interval, no guaranteed time of day, and nothing below 15 minutes. `backgroundProcessing` additionally requires the device to be charging and on Wi-Fi; if it isn't, the run is skipped rather than deferred.
+
+Three things follow from the same platform constraint that there is one background task per *type* rather than per project:
+
+- Every project declaring a flag shares one window, running serially inside roughly 30 seconds. A slow script starves the ones behind it.
+- When the window expires, Loom stops starting new projects but cannot interrupt one already running — that's the no-timeout limitation above, seen from the other side.
+- A background run has no window, so `Loom.ui.*` skips. `Loom.activity.start` still works from a Shortcut or Siri run with Open When Run off — only an unattended background refresh resolves `null`. Updating and ending an existing activity works from anywhere.
+
+Background triggers also do not work in the iOS Simulator — `BGTaskScheduler` isn't available there, so scheduling fails and no window is ever granted. Test them on a device.
+
+If you need something to happen at a specific time, drive Loom's App Intent from a Shortcuts automation instead. See [Background Tasks](loom-doc://guides/background-tasks.md).
+
 ## Siri AI and the EU
 
 Under the EU Digital Markets Act, Siri's multi-step AI tool calling is not available at iOS 27 launch for users in the EU. If your script relies on Siri inferring parameters across a multi-step conversation, that path doesn't exist there yet.

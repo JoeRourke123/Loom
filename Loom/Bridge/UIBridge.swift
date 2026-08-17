@@ -93,15 +93,34 @@ final class UIBridge {
         // an async route handler. See LoomWebSheet.serveJS.
         let capturedCtx = ctx
 
-        let openBlock: @convention(block) (JSValue, JSValue, JSValue) -> JSValue = { [weak self] templateVal, htmlVal, titleVal in
+        let openBlock: @convention(block) (JSValue) -> JSValue = { [weak self] optsVal in
             guard let self else { return JSValue(undefinedIn: capturedCtx) }
-            let title = titleVal.isString ? (titleVal.toString() ?? "") : ""
+
+            func str(_ key: String) -> String? {
+                guard let v = optsVal.objectForKeyedSubscript(key), v.isString else { return nil }
+                return v.toString()
+            }
+            // Only an explicit boolean false counts — a truthy stray value must not strip chrome.
+            func isFalse(_ key: String) -> Bool {
+                guard let v = optsVal.objectForKeyedSubscript(key), v.isBoolean else { return false }
+                return !v.toBool()
+            }
+
+            var chrome = LoomWebChrome()
+            chrome.title = str("title") ?? ""
+            chrome.subtitle = str("subtitle")
+            chrome.showsBar = !isFalse("bar")
+            if let label = str("button") {
+                chrome.button = .titled(label)
+            } else if isFalse("button") {
+                chrome.button = .hidden
+            }
 
             // Resolving the document is file IO, not UI — do it here on the script thread.
             let document: String
-            if htmlVal.isString, let inline = htmlVal.toString() {
+            if let inline = str("html") {
                 document = inline
-            } else if templateVal.isString, let name = templateVal.toString(),
+            } else if let name = str("template"),
                       let url = LoomWebSheet.templateURL(name, project: self.project),
                       let text = try? String(contentsOf: url, encoding: .utf8) {
                 document = text
@@ -118,7 +137,7 @@ final class UIBridge {
                     // No foreground scene (a background, Siri or Share Extension run) — resolve
                     // false so the serve loop returns at once instead of parking the run forever.
                     guard let vc = topViewController() else { self.warnNoForeground("Loom.ui.web"); resolve(false); return }
-                    session.present(from: vc, title: title)
+                    session.present(from: vc, chrome: chrome)
                     // Resolved here, never from present()'s completion: a present() that lands
                     // mid-transition can silently no-op and never call back, which would park the
                     // script thread for good.

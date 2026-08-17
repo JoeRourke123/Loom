@@ -3,9 +3,10 @@ import { probe } from './probe';
 
 // start → list → update → end, so nothing is left running on the Lock Screen.
 //
-// Two things make this suite fail in ways that aren't Loom's fault: iOS only allows an activity
-// to be *started* from the foreground (a background or Siri run resolves null), and Live
-// Activities must be enabled for Loom in Settings → Loom → Live Activities.
+// Two things make this suite fail in ways that aren't Loom's fault: only a run the user asked for
+// can *start* an activity — in-app, a Shortcut, or Siri all count, an unattended background
+// refresh resolves null — and Live Activities must be enabled for Loom in Settings → Loom → Live
+// Activities.
 const KEY = 'playground';
 
 export async function activitySuite() {
@@ -33,8 +34,8 @@ export async function activitySuite() {
       style: 'standard',
     });
     started = key !== null;
-    // null is iOS declining, not an error — usually a background start or the setting being off.
-    return key === null ? 'null — iOS declined (background start, or Live Activities are off)' : key;
+    // null is iOS declining, not an error — a background refresh, or the setting being off.
+    return key === null ? 'null — iOS declined (background refresh, or Live Activities are off)' : key;
   }));
 
   results.push(await probe('activity.list', () => Loom.activity.list()));

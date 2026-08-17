@@ -17,6 +17,7 @@ struct LoomApp: App {
         LoomAPICatalog.runSelfCheck()
         SuggestionEngine.runSelfCheck()
         LoomWebSheet.runSelfCheck()
+        WidgetImageCache.runSelfCheck()
         TableQuery.runSelfCheck()
         KVQuery.runSelfCheck()
         LogQuery.runSelfCheck()
@@ -24,6 +25,7 @@ struct LoomApp: App {
         ActivityBridge.runSelfCheck()
         ExampleCatalog.runSelfCheck()
         ExampleCatalog.runPlaygroundCoverageCheck()
+        BackgroundTaskManager.runSelfCheck()
         // Async because they drive the real SWC compiler and a real SQLite file respectively;
         // everything above is synchronous.
         Task { await ModuleBundler.runCompilerSelfCheck() }
@@ -42,8 +44,20 @@ struct LoomApp: App {
                     Task { await DeepLinkHandler.handle(url) }
                 }
         }
-        .onChange(of: scenePhase) { _, _ in
-            // Background/foreground hooks wired in M7
+        .onChange(of: scenePhase) { _, phase in
+            // Nothing is pending until the app has been backgrounded at least once — iOS won't
+            // grant a window to an app the user is currently looking at anyway.
+            if phase == .background { BackgroundTaskManager.scheduleAll() }
+        }
+        // SwiftUI owns registration, setTaskCompleted() and the expiration handler for both of
+        // these; each one only has to queue its replacement and fan out. See ADR-024.
+        .backgroundTask(.appRefresh(BackgroundTaskManager.refreshIdentifier)) {
+            await BackgroundTaskManager.scheduleRefresh()
+            await BackgroundTaskManager.runAll(trigger: .backgroundRefresh)
+        }
+        .backgroundTask(.processingTask(BackgroundTaskManager.processingIdentifier)) {
+            await BackgroundTaskManager.scheduleProcessing()
+            await BackgroundTaskManager.runAll(trigger: .backgroundProcessing)
         }
     }
 }

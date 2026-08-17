@@ -231,17 +231,38 @@ final class LoomWebNavigationDelegate: NSObject, WKNavigationDelegate {
     }
 }
 
+// MARK: - Sheet chrome
+
+/// Everything the author can say about how the sheet is framed, as opposed to what it serves.
+/// Built from the `Loom.ui.web()` options object in UIBridge; defaults reproduce the original
+/// hardcoded look exactly, so a call that passes none of these is unchanged.
+struct LoomWebChrome {
+    enum Button {
+        case done              // system Done — the default
+        case titled(String)    // author-supplied label
+        case hidden            // no dismiss button at all
+    }
+
+    var title = ""
+    var subtitle: String?
+    var button = Button.done
+    var showsBar = true
+}
+
 // MARK: - Sheet controller
 
 final class LoomWebSheetController: UIViewController {
     private let webView: WKWebView
+    private let chrome: LoomWebChrome
     private let onDismiss: () -> Void
 
-    init(webView: WKWebView, title: String, onDismiss: @escaping () -> Void) {
+    init(webView: WKWebView, chrome: LoomWebChrome, onDismiss: @escaping () -> Void) {
         self.webView = webView
+        self.chrome = chrome
         self.onDismiss = onDismiss
         super.init(nibName: nil, bundle: nil)
-        self.title = title
+        self.title = chrome.title
+        self.navigationItem.subtitle = chrome.subtitle
     }
 
     @available(*, unavailable)
@@ -252,10 +273,29 @@ final class LoomWebSheetController: UIViewController {
         view.backgroundColor = .systemBackground
         webView.frame = view.bounds
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        // The web view deliberately spans the full sheet so content scrolls *under* the glass
+        // navigation bar, which is the iOS 27 look. That only works if the scroll view is inset
+        // by the bar's height — without this the document's first rows start at y=0, hidden
+        // behind the bar, and a page has no way to discover how much room to leave.
+        //
+        // `.always` rather than the `.automatic` default: automatic declines to adjust when it
+        // can't identify the web view's scroll view as the controller's primary one, which is
+        // exactly what happened here.
+        webView.scrollView.contentInsetAdjustmentBehavior = .always
         view.addSubview(webView)
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .done, target: self, action: #selector(doneTapped)
-        )
+        switch chrome.button {
+        case .done:
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                barButtonSystemItem: .done, target: self, action: #selector(doneTapped)
+            )
+        case .titled(let label):
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                title: label, style: .done, target: self, action: #selector(doneTapped)
+            )
+        case .hidden:
+            // Swipe-to-dismiss is the only exit. present() shows the grabber to say so.
+            break
+        }
     }
 
     @objc private func doneTapped() { dismiss(animated: true) }
@@ -283,7 +323,7 @@ final class LoomWebSession {
     init(document: String) { self.document = document }
 
     @MainActor
-    func present(from presenter: UIViewController, title: String) {
+    func present(from presenter: UIViewController, chrome: LoomWebChrome) {
         let handler = LoomWebSchemeHandler(queue: queue, document: document)
         self.handler = handler
 
@@ -300,14 +340,18 @@ final class LoomWebSession {
         webView.isInspectable = true
         #endif
 
-        let sheet = LoomWebSheetController(webView: webView, title: title) { [weak self] in
+        let sheet = LoomWebSheetController(webView: webView, chrome: chrome) { [weak self] in
             self?.queue.close()
         }
         controller = sheet
 
         let nav = UINavigationController(rootViewController: sheet)
         nav.modalPresentationStyle = .pageSheet
+        nav.isNavigationBarHidden = !chrome.showsBar
         nav.sheetPresentationController?.detents = [.large()]
+        // With no bar there is no Done button, so the grabber has to carry the whole "you can
+        // swipe this away" signal. It stays off when the bar is showing — that is the system look.
+        nav.sheetPresentationController?.prefersGrabberVisible = !chrome.showsBar
 
         // present() during another presentation's transition can silently no-op. The Run button
         // expands the console panel sheet immediately before starting the run, so that transition
@@ -352,6 +396,10 @@ enum LoomWebSheet {
     // A factory taking the four native blocks and returning the async function that becomes
     // Loom.ui.web. Closing over the blocks avoids adding four more globals to the script context.
     //
+    // `opts` crosses to Swift whole rather than as positional arguments, so a new presentation
+    // option costs a Swift-side change only. Swift reads the keys it knows by name and never
+    // touches `routes`, which holds functions.
+    //
     // String(r) is what lets the `html` tag's {__html, toString} drop in with no special case.
     // The per-route try/catch means one failing route never kills the loop — the same principle as
     // __loom_collect_widget__'s catch in ModuleBundler.
@@ -360,11 +408,7 @@ enum LoomWebSheet {
       return async function(opts) {
         opts = opts || {};
         var routes = opts.routes || {};
-        var opened = await open(
-          typeof opts.template === 'string' ? opts.template : null,
-          typeof opts.html === 'string' ? opts.html : null,
-          typeof opts.title === 'string' ? opts.title : null
-        );
+        var opened = await open(opts);
         if (!opened) { close(); return; }
         try {
           while (true) {
@@ -461,8 +505,12 @@ extension LoomWebSheet {
                 let fn = ctx.objectForKeyedSubscript("__loomResolve")!
                 return value.map { fn.call(withArguments: [$0])! } ?? fn.call(withArguments: [])!
             }
-            let openBlock: @convention(block) (JSValue, JSValue, JSValue) -> JSValue = { _, _, _ in
-                resolve(true)
+            // Captures the options object so the JS→Swift key contract can be asserted below.
+            // Everything the sheet's chrome does is read off this one value.
+            var openedWith: JSValue?
+            let openBlock: @convention(block) (JSValue) -> JSValue = { opts in
+                openedWith = opts
+                return resolve(true)
             }
             let nextBlock: @convention(block) () -> JSValue = {
                 resolve(queued.isEmpty ? nil : queued.removeFirst())
@@ -478,6 +526,7 @@ extension LoomWebSheet {
                 ctx.evaluateScript("""
                 var __done__ = false;
                 __web__({
+                  title: 'T', subtitle: 'S', button: false, bar: false, html: '<p>hi</p>',
                   routes: {
                     '/sync':        function(){ return 'S'; },
                     '/async':       function(){ return Promise.resolve('A'); },
@@ -496,6 +545,26 @@ extension LoomWebSheet {
             check("serve.noException", exception == nil)
             check("serve.allResponded", responses.count == 4)
             check("serve.closed", closed)
+
+            // The options object reaches Swift whole, with types intact. UIBridge's chrome parsing
+            // reads exactly these keys, and distinguishes boolean false from absent — an option
+            // arriving as a string 'false', or not arriving at all, would silently do nothing.
+            if let opts = openedWith {
+                check("opts.title", opts.objectForKeyedSubscript("title")?.toString() == "T")
+                check("opts.subtitle", opts.objectForKeyedSubscript("subtitle")?.toString() == "S")
+                check("opts.html", opts.objectForKeyedSubscript("html")?.isString == true)
+                let button = opts.objectForKeyedSubscript("button")
+                check("opts.buttonIsBool", button?.isBoolean == true && button?.toBool() == false)
+                let bar = opts.objectForKeyedSubscript("bar")
+                check("opts.barIsBool", bar?.isBoolean == true && bar?.toBool() == false)
+                // Absent keys must read as undefined, not as an empty string — that is what makes
+                // "option omitted" fall through to the default rather than to a blank title.
+                check("opts.absentUndefined", opts.objectForKeyedSubscript("nope")?.isUndefined == true)
+                // routes crosses too, but Swift never reads it. Pinned so nobody starts.
+                check("opts.routesIsObject", opts.objectForKeyedSubscript("routes")?.isObject == true)
+            } else {
+                failures.append("opts.notCaptured")
+            }
             if responses.count == 4 {
                 // Order preserved, and the loop kept going past the throwing route.
                 check("serve.order", responses.map(\.id) == [1, 2, 3, 4])

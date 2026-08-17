@@ -39,6 +39,7 @@ enum LoomAPICatalog {
 
         // MARK: network
         "network.fetch|await Loom.network.fetch()|network.fetch(url: string, options?: {method?, headers?, body?}): Promise<Response> — HTTP fetch; read via response._body, no .text()/.json()",
+        "network.fetchAll|await Loom.network.fetchAll()|network.fetchAll(requests: {url, method?, headers?, body?}[]): Promise<Response[]> — runs up to 64 requests concurrently (8 in flight) and resolves positionally; a failed element has status 0 and an error string rather than rejecting the batch. The only way to overlap network calls — plain fetch() blocks the script thread, so Promise.all over it stays serial",
 
         // MARK: files (project-sandboxed, no absolute paths or ../ traversal)
         "files.read|await Loom.files.read()|files.read(path: string): Promise<string> — read a project-relative file as UTF-8",
@@ -64,7 +65,7 @@ enum LoomAPICatalog {
         "ui.alert|await Loom.ui.alert()|ui.alert(options?: {title?, message?}): Promise<void> — OK-only alert",
         "ui.input|await Loom.ui.input()|ui.input(options?: {prompt?, placeholder?}): Promise<string> — text prompt, cancel returns empty string",
         "ui.table|await Loom.ui.table()|ui.table(options?: {rows?, columns?}): Promise<void> — read-only scrollable table sheet",
-        "ui.web|await Loom.ui.web()|ui.web(options: {template?: string, html?: string, title?: string, routes: Record<string, (req) => string>}): Promise<void> — htmx web sheet; serves an .html page and routes its hx-* requests to your functions. Blocks until dismissed. routes must be passed here, never in loom() config",
+        "ui.web|await Loom.ui.web()|ui.web(options: {template?: string, html?: string, title?: string, subtitle?: string, button?: string | false, bar?: boolean, routes: Record<string, (req) => string>}): Promise<void> — htmx web sheet; serves an .html page and routes its hx-* requests to your functions. Blocks until dismissed. button renames the Done button or removes it (false); bar: false hides the nav bar entirely. routes must be passed here, never in loom() config",
 
         // MARK: notify
         "notify.schedule|await Loom.notify.schedule()|notify.schedule(options?: {title?, body?, trigger?}): Promise<string> — one-shot local notification, returns id",
@@ -87,7 +88,7 @@ enum LoomAPICatalog {
         "speech.recognize|await Loom.speech.recognize()|speech.recognize(): Promise<string> — mic transcription, stops when user taps Done",
 
         // MARK: contacts (CNContactStore)
-        "contacts.search|await Loom.contacts.search()|contacts.search(query: string): Promise<Contact[]> — search by name",
+        "contacts.search|await Loom.contacts.search()|contacts.search(query?: string): Promise<Contact[]> — search by name; omit query for all contacts",
         "contacts.create|await Loom.contacts.create()|contacts.create(fields: object): Promise<{id}> — create a contact",
         "contacts.update|await Loom.contacts.update()|contacts.update(id: string, fields: object): Promise<void> — partial update",
         "contacts.delete|await Loom.contacts.delete()|contacts.delete(id: string): Promise<void> — delete a contact",
@@ -116,6 +117,7 @@ enum LoomAPICatalog {
 
         // MARK: ai (Loom.ai — script-facing bridge; separate from the in-app authoring assistant)
         "ai.complete|await Loom.ai.complete()|ai.complete(prompt: string, opts?: {provider?, maxTokens?, instructions?, model?}): Promise<string> — single-turn completion",
+        "ai.completeAll|await Loom.ai.completeAll()|ai.completeAll(prompts: string[], opts?: object): Promise<{text, error}[]> — runs up to 64 completions concurrently (8 in flight), same opts as complete(), resolving positionally; a failed prompt carries its error instead of rejecting the batch",
         "ai.chat|await Loom.ai.chat()|ai.chat(messages: {role, content}[], opts?: object): Promise<string> — multi-turn chat (single-turn on the apple provider)",
         "ai.search|await Loom.ai.search()|ai.search(query: string, opts: {corpus: string[]}): Promise<{text, score}[]> — on-device semantic search over a provided corpus",
 
@@ -135,6 +137,7 @@ enum LoomAPICatalog {
         "w.spacer|w.spacer()|w.spacer(props?: {minLength?}): ComponentNode — flexible or fixed empty space",
         "w.divider|w.divider()|w.divider(props?: {color?}): ComponentNode — thin dividing line",
         "w.text|w.text()|w.text(content?, props?: {font?, bold?, italic?, alignment?, color?, lineLimit?}): ComponentNode — text label",
+        "w.date|w.date()|w.date(isoString?, props?: {style?: 'relative'|'days'|'date'|'time'|'timer'|'offset', font?, bold?, alignment?, color?, lineLimit?}): ComponentNode — live date text, re-renders itself without a run. 'relative' always shows two units ('4 days, 11 hrs'); use 'days' for a plain whole-day countdown ('4 days', 'Tomorrow') that changes at midnight",
         "w.label|w.label()|w.label(props: {icon, title, subtitle?, color?}): ComponentNode — SF Symbol + title/subtitle row",
         "w.image|w.image()|w.image(url?, props?: {cornerRadius?, width?, height?}): ComponentNode — remote image, scaled to fill",
         "w.icon|w.icon()|w.icon(name?, props?: {size?, color?}): ComponentNode — a single SF Symbol",

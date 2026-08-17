@@ -134,3 +134,11 @@ now guarded to `.ts`.
 
 **Deferred:** custom response status/headers and `HX-Redirect`/`HX-Trigger`; static asset serving;
 path parameters; SSE and `hx-ws`; more than one sheet at a time; a `web` key in `loom()` config.
+
+**Amendment, 2026-08-17 — configurable chrome.** `title`, `subtitle`, `button` (rename or remove)
+and `bar` (hide the navigation bar) are now options, carried in a `LoomWebChrome` struct. The
+options object crosses to Swift **whole** rather than as positional arguments, so the next option
+is a Swift-only change; Swift reads the keys it knows and never touches `routes`. Sheet height
+stays `.large()` — no `detent` option — and a route handler still cannot dismiss the sheet, so
+`bar: false` relies on swipe-to-dismiss with the grabber forced visible. Both remain deferred; a
+programmatic close is the one to reach for first if hidden-bar sheets prove hard to leave.

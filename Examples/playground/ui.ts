@@ -25,7 +25,7 @@ export async function uiSuite() {
           // Deliberately missing 'shape' — with columns set, the key still renders, empty.
           { api: 'ui.table' },
           // Deliberately extra — with columns set, this never shows.
-          { api: 'ui.web', shape: '{ template?|html?, title?, routes }', hidden: 'not in columns' },
+          { api: 'ui.web', shape: '{ template?|html?, title?, subtitle?, button?, bar?, routes }', hidden: 'not in columns' },
         ],
       })),
 
@@ -33,6 +33,12 @@ export async function uiSuite() {
       let pings = 0;
       await Loom.ui.web({
         title: 'Playground',
+        // Second line under the title. Static for the sheet's lifetime — no route can change it.
+        subtitle: 'ui.web chrome options',
+        // Renames the Done button. `button: false` removes it, and `bar: false` drops the whole
+        // navigation bar — in both those cases swipe-down is the only way out, so Loom shows the
+        // grabber. Not exercised here: a sheet you can only swipe away is a poor probe.
+        button: 'Close',
         // No <script src="htmx"> — Loom injects it. Adding one yourself is the usual mistake.
         html: `<!doctype html>
 <html><body style="font:16px -apple-system;padding:24px;line-height:1.6">

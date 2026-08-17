@@ -46,5 +46,57 @@ export async function networkSuite() {
       const res = await Loom.network.fetch(JSON_GET);
       return Object.keys(res.headers ?? {}).sort().join(', ') || 'no headers — cast to [String: String] failed';
     }),
+
+    await probe('network.fetchAll', async () => {
+      const out = await Loom.network.fetchAll([
+        { url: JSON_GET },
+        { url: ECHO, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ i: 1 }) },
+        { url: JSON_GET },
+      ]);
+      // Positional: out[i] belongs to requests[i], whatever order they finished in.
+      return `${out.length} results, statuses ${out.map((r) => r.status).join(',')}`;
+    }),
+
+    // The entire reason this method exists. fetch() blocks the script thread, so three of them
+    // cost the sum of their latencies and Promise.all can't help — the promises are settled before
+    // it ever sees them. If these two numbers come back the same, the fan-out is not fanning out.
+    await probe('network.fetchAll (actually concurrent)', async () => {
+      const urls = [JSON_GET, JSON_GET, JSON_GET];
+      const t0 = Date.now();
+      for (const url of urls) await Loom.network.fetch(url);
+      const serial = Date.now() - t0;
+
+      const t1 = Date.now();
+      await Loom.network.fetchAll(urls.map((url) => ({ url })));
+      const batched = Date.now() - t1;
+
+      return `serial ${serial}ms vs batched ${batched}ms`;
+    }),
+
+    // One dead host must not throw away the results that did arrive.
+    await probe('network.fetchAll (partial failure)', async () => {
+      const out = await Loom.network.fetchAll([
+        { url: JSON_GET },
+        { url: 'https://loom-playground.invalid/' },
+      ]);
+      if (out.length !== 2) throw new Error(`expected 2 results, got ${out.length}`);
+      if (out[1].status !== 0 || !out[1].error) throw new Error('a dead host should give status 0 and an error string');
+      return `[0] ok=${out[0].ok}, [1] status=${out[1].status} error="${String(out[1].error).slice(0, 40)}"`;
+    }),
+
+    await probe('network.fetchAll (empty array)', async () => {
+      const out = await Loom.network.fetchAll([]);
+      return out.length === 0 ? '[] without touching the network' : `unexpected: ${out.length}`;
+    }),
+
+    // Rejects before dispatching anything, so this costs no requests.
+    await probe('network.fetchAll (over 64 must reject)', async () => {
+      try {
+        await Loom.network.fetchAll(Array.from({ length: 65 }, () => ({ url: JSON_GET })));
+      } catch (err) {
+        return `rejected as expected: ${(err as any)?.message ?? err}`;
+      }
+      throw new Error('65 requests were accepted — the batch cap is not enforced');
+    }),
   ];
 }
